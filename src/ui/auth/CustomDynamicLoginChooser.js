@@ -1,0 +1,47 @@
+import { useState } from "react";
+import { PressableScale } from "react-native-pressable-scale";
+import { ChevronDownIcon } from "lucide-react-native";
+// import * as DropdownMenu from 'zeego/dropdown-menu'
+// import firestore from '@react-native-firebase/firestore';
+
+import { useGlobalAppContext } from "../../util/GlobalAppContext";
+import { capitalizeWords } from "../../util/Utils";
+
+
+// Chooser used to test bug reports directly in the app
+function CustomDynamicLoginChooser({ setSelected }) {
+  const { theme } = useGlobalAppContext();
+
+  // Dynamically loaded documents
+  const [documents, setDocuments] = useState({
+    "functionality": [],
+    "interface": [],
+    "performance": [],
+    "other": [],
+  });
+  async function loadDocuments(bugReportType) {
+    console.log(`Loading documents from ${bugReportType}...`);
+    // firestore().collection("bugReports").where("type", "==", bugReportType).get()
+    //   .then((querySnapshot) => {
+    //     const documentsTemp = [];
+    //     querySnapshot.forEach((doc) => {
+    //       documentsTemp.push({ id: doc.id, title: doc.id });
+    //     });
+
+    //     setDocuments({ ...documents, [bugReportType]: documentsTemp });
+    //     console.log(`Loaded ${documentsTemp.length} documents from ${bugReportType}.`);
+    //   })
+    //   .catch((error) => {
+    //     console.log("Error getting documents: ", error);
+    //   });
+  }
+
+  return (
+    // Zeego removed
+    <PressableScale onPress={() => console.log("Debug menu disabled")}>
+      <ChevronDownIcon size={25} color={theme.colors.onSurfaceDisabled} />
+    </PressableScale>
+  );
+}
+
+export default CustomDynamicLoginChooser;

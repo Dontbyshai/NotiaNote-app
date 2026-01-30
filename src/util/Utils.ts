@@ -1,0 +1,193 @@
+import { Linking, Alert } from "react-native";
+import { htmlToText } from "html-to-text";
+import { InAppBrowser } from 'react-native-inappbrowser-reborn'
+import dayjs from "dayjs";
+import customParseFormat from 'dayjs/plugin/customParseFormat';
+dayjs.extend(customParseFormat);
+
+var Buffer = require('buffer/').Buffer;
+
+
+async function openLink(link: string, isSpecial: boolean = false) {
+  if (isSpecial) { Linking.openURL(link); return; }
+
+  try {
+    if (await InAppBrowser.isAvailable()) {
+      await InAppBrowser.open(link, {
+        animated: true,
+        dismissButtonStyle: 'done',
+        modalEnabled: true,
+        modalPresentationStyle: 'pageSheet',
+      });
+    }
+    else Linking.openURL(link);
+  } catch (error) {
+    Alert.alert(error.message);
+  }
+}
+
+async function wait(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function capitalizeWords(phrase: string): string {
+  return phrase.split(" ").map(word => word.charAt(0).toUpperCase() + word.toLowerCase().slice(1)).join(" ");
+}
+
+function formatDate(date: string): string {
+  if (!date) { return "--"; }
+  const previousDate: Date = new Date(date);
+
+  if ((Date.now() - previousDate.valueOf()) < 12 * 60 * 60 * 1000) {
+    return previousDate.toLocaleString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }).replace(":", "h");
+  }
+  return previousDate.toLocaleString("fr-FR", { timeZone: "Europe/Paris", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).replace(":", "h");
+}
+
+const daysNames = [
+  "Dimanche",
+  "Lundi",
+  "Mardi",
+  "Mercredi",
+  "Jeudi",
+  "Vendredi",
+  "Samedi",
+];
+const monthsNames = [
+  "Janvier",
+  "Février",
+  "Mars",
+  "Avril",
+  "Mai",
+  "Juin",
+  "Juillet",
+  "Aout",
+  "Septembre",
+  "Octobre",
+  "Novembre",
+  "Décembre",
+];
+function formatDate2(givenDate: string, tellIfNear: boolean = false, isFrLocale: boolean = false): string {
+  var date: Date;
+  if (isFrLocale) {
+    date = dayjs(givenDate, "YYYY-MM-DD", "fr").toDate();
+  } else {
+    date = new Date(givenDate);
+  }
+
+  if (tellIfNear) {
+    const now = new Date();
+    if (date.getFullYear() == now.getFullYear() && date.getMonth() == now.getMonth()) {
+      if (date.getDate() == now.getDate()) {
+        return "Aujourd'hui";
+      } else if (date.getDate() == now.getDate() + 1) {
+        return "Demain";
+      }
+    }
+  }
+
+  return `${daysNames[date.getDay()]} ${date.getDate()} ${monthsNames[date.getMonth()]}`;
+}
+function formatDate3(givenDate: string | null, date: null | Date, tellIfNear: boolean = false): string {
+  date ??= new Date(givenDate);
+
+  if (tellIfNear) {
+    const now = new Date();
+    if (date.getFullYear() == now.getFullYear() && date.getMonth() == now.getMonth()) {
+      if (date.getDate() == now.getDate()) {
+        return "Aujourd'hui";
+      } else if (date.getDate() == now.getDate() + 1) {
+        return "Demain";
+      }
+    }
+  }
+
+  return `${date.getDate()} ${monthsNames[date.getMonth()]}`;
+}
+function dateDiff(date1: Date, date2: Date): string {
+  const diff = date1.valueOf() - date2.valueOf();
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const minutes = Math.floor((diff / (1000 * 60)) % 60);
+  return `${hours}h${minutes}m`;
+}
+
+function formatAverage(average: number, decimals: boolean = true): string {
+  if (!average) { return "--"; }
+  if (decimals) { return average.toFixed(2).replace('.', ','); }
+  return (Math.round(average * 100) / 100).toString().replace('.', ',');
+}
+
+function formatMark(mark: { valueStr: string, classValue: number, valueOn: number }, isClass: boolean = false): string {
+  if (!isClass) {
+    if (mark.valueOn == 20 || mark.valueOn == 0) { return mark.valueStr; }
+    if (!mark.valueStr) { return `--`; }
+    return `${mark.valueStr}/${mark.valueOn}`;
+  } else {
+    if (mark.valueOn == 20) { return `${mark.classValue}`.replace(".", ","); }
+    return `${mark.classValue}/${mark.valueOn}`.replace(".", ",");
+  }
+}
+
+function getLatestDate(date1: Date, date2: Date): Date {
+  if (date1 > date2) { return date1; }
+  return date2;
+}
+
+function asyncExpectedResult(func: any, onFinish: any, expectedResult: any) {
+  expectedResult();
+  func().then(onFinish);
+}
+
+function decodeHtmlData(data: any): string {
+  if (!data) { return ""; }
+
+  // Clean whitespace/newlines which break the regex and length check
+  const cleanData = String(data).replace(/\s/g, '');
+
+  // Strict Base64 Check on cleaned data:
+  // 1. Must contain only valid characters
+  // 2. Must be multiple of 4 in length
+  const isBase64Chars = /^[A-Za-z0-9+/]*={0,2}$/.test(cleanData);
+  const isMultipleOf4 = (cleanData.length % 4 === 0);
+
+  if (!isBase64Chars || !isMultipleOf4) {
+    // If check fails on cleaned data, maybe it was not base64. Return original.
+    return data;
+  }
+
+  try {
+    let binaryData = Buffer.from(cleanData, 'base64').toString('binary');
+    let utf8Data = decodeURIComponent(escape(binaryData));
+    return utf8Data;
+  } catch (e) {
+    // console.log("decodeHtmlData failed, returning raw:", e);
+    return data;
+  }
+}
+
+function parseHtmlData(data: any): string {
+  const html = decodeHtmlData(data);
+  return htmlToText(html, {
+    wordwrap: false,
+    selectors: [
+      { selector: 'img', format: 'skip' }, // Skip images to avoid printing base64 data
+      { selector: 'a', options: { ignoreHref: true } } // Optional: cleaner links
+    ]
+  });
+}
+
+function normalizeString(str: string): string {
+  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function hashString(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash |= 0; // Convert to 32bit integer
+  }
+  return hash.toString();
+}
+
+export { openLink, wait, capitalizeWords, formatDate, formatDate2, formatDate3, dateDiff, formatAverage, formatMark, getLatestDate, asyncExpectedResult, parseHtmlData, decodeHtmlData, normalizeString, hashString };
