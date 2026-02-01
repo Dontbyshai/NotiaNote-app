@@ -7,9 +7,14 @@ import * as FileSystem from 'expo-file-system/legacy';
 class StorageHandler {
   // Handle local data //
 
+  // Ajoute un préfixe de plateforme à la clé pour séparer iOS et Android
+  static getPlatformKey(fileName: string): string {
+    return `${Platform.OS}_${fileName}`;
+  }
+
   // Check if data exists
   static async dataExists(fileName: string): Promise<boolean> {
-    const jsonData = await AsyncStorage.getItem(fileName);
+    const jsonData = await AsyncStorage.getItem(this.getPlatformKey(fileName));
     if (jsonData !== null) { return true; }
 
     const fileInfo = await FileSystem.getInfoAsync(`${FileSystem.documentDirectory}files/${fileName}`);
@@ -18,11 +23,23 @@ class StorageHandler {
 
   // Save JSON data to file
   static async saveData(fileName: string, data: {}) {
-    await AsyncStorage.setItem(fileName, JSON.stringify(data));
+    await AsyncStorage.setItem(this.getPlatformKey(fileName), JSON.stringify(data));
   }
   // Get JSON data from file
   static async getData(fileName: string): Promise<{} | null> {
-    const data = await AsyncStorage.getItem(fileName);
+    const platformKey = this.getPlatformKey(fileName);
+    let data = await AsyncStorage.getItem(platformKey);
+
+    // Migration automatique si pas de données avec le nouveau préfixe
+    if (!data) {
+      const oldData = await AsyncStorage.getItem(fileName);
+      if (oldData) {
+        console.log(`[StorageHandler] Migrating ${fileName} to platform-specific key`);
+        await AsyncStorage.setItem(platformKey, oldData);
+        data = oldData;
+      }
+    }
+
     return data ? JSON.parse(data) : null;
   }
 
@@ -117,7 +134,7 @@ class StorageHandler {
           await FileSystem.deleteAsync(cacheDir, { idempotent: true });
         }
       } else {
-        await AsyncStorage.removeItem(name);
+        await AsyncStorage.removeItem(this.getPlatformKey(name));
       }
     }
   }

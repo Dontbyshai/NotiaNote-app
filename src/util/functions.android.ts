@@ -115,8 +115,8 @@ async function doLogin(username: string, password: string, gtk: string, cookie: 
     url.searchParams.set("v", "4.75.0");
 
     const body = {
-        identifiant: encodeURIComponent(username),
-        motdepasse: encodeURIComponent(password),
+        identifiant: (username),
+        motdepasse: (password),
         isReLogin: false,
         uuid: "",
         fa: [{ cn: cn, cv: cv }],
@@ -124,7 +124,10 @@ async function doLogin(username: string, password: string, gtk: string, cookie: 
     };
 
     // Important: EcoleDirecte expects form-urlencoded body with a 'data' key containing the JSON
-    const requestBody = `data=${JSON.stringify(body)}`;
+    const bodyStr = JSON.stringify(body);
+    // Aligning Android with iOS standard fix
+    const requestBody = `data=${encodeURIComponent(bodyStr)}`;
+    console.log(`[Android Login] Payload: ${bodyStr}`);
 
     const loginResponse = await fetchED(url.toString(), {
         method: "POST",

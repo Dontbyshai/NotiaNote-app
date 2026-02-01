@@ -133,7 +133,15 @@ class AccountHandler {
   static async refreshLogin() {
     const credentials = await StorageHandler.getData("credentials");
     if (!credentials) return 0;
+
     const status = await this.login(credentials.username, credentials.password);
+
+    // Si le login échoue (mauvais mot de passe), supprimer les credentials corrompus
+    if (status === 0) {
+      console.warn("[AccountHandler] Auto-login failed, clearing corrupted credentials");
+      await StorageHandler.deleteFiles(["credentials", "accounts", "selectedAccount"]);
+    }
+
     return status;
   }
   // Refresh token when switching accounts

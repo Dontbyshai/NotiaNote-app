@@ -2,11 +2,12 @@ import { memo, useState, useEffect } from "react";
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Dimensions, Alert, Platform } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ChevronLeftIcon, BugIcon } from "lucide-react-native";
+import { ChevronLeftIcon, BugIcon, HelpCircle, Send } from "lucide-react-native";
 // import firestore from '@react-native-firebase/firestore';
 
 import StorageHandler from "../../../../core/StorageHandler";
 import { useGlobalAppContext } from "../../../../util/GlobalAppContext";
+import DiscordHandler from "../../../../core/DiscordHandler";
 
 // Helper Header
 const GalaxyHeader = ({ title, onBack, theme }) => {
@@ -32,14 +33,16 @@ const GalaxyHeader = ({ title, onBack, theme }) => {
   );
 };
 
-function BugReportPage({ navigation }) {
+function BugReportPage({ navigation, route }) {
   const { theme } = useGlobalAppContext();
+  const isSuggestionMode = route?.params?.initialType === 'other';
   const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
 
   const [username, setUsername] = useState(null);
-  const [selectedBugType, setSelectedBugType] = useState("functionality");
+  const [selectedBugType, setSelectedBugType] = useState(route?.params?.initialType || "functionality");
   const [bugDescription, setBugDescription] = useState("");
   const [sentBugReport, setSentBugReport] = useState(false);
+  const [sentSuggestion, setSentSuggestion] = useState(false);
   const [isSendingBugReport, setIsSendingBugReport] = useState(false);
   const [errorWhileSendingBugReport, setErrorWhileSendingBugReport] = useState(false);
 
@@ -58,13 +61,23 @@ function BugReportPage({ navigation }) {
         if (diffDays < 7) setSentBugReport(true);
       }
     });
+    StorageHandler.getData("lastTimeSentSuggestion").then((value) => {
+      if (value) {
+        const lastTime = new Date(value);
+        const diffHours = Math.abs(new Date() - lastTime) / 36e5;
+        if (diffHours < 24) setSentSuggestion(true);
+      }
+    });
     StorageHandler.getData("credentials").then(data => data && setUsername(data.username));
   }, []);
 
   async function sendBugReport() {
-    if (isSendingBugReport || sentBugReport) return;
+    const isSuggestion = selectedBugType === 'other';
+    if (isSendingBugReport || (isSuggestion ? sentSuggestion : sentBugReport)) return;
     setErrorWhileSendingBugReport(false);
     setIsSendingBugReport(true);
+
+
 
     try {
       const loginLogs = await StorageHandler.getData("logs-login");
@@ -72,22 +85,48 @@ function BugReportPage({ navigation }) {
       const homeworkLogs = await StorageHandler.getData("logs-homework");
       anonymiseLogs(loginLogs, marksLogs, homeworkLogs);
 
-      // Use add() instead of set() to avoid overwriting reports
-      // await firestore().collection("bugReports").add({
-      //   username: username || 'unknown',
-      //   date: new Date(),
-      //   type: selectedBugType,
-      //   description: bugDescription,
-      //   logs: { login: loginLogs, marks: marksLogs, homework: homeworkLogs },
-      // });
-      console.log('BUG REPORT SIMULATION CHECK');
+      // Try to find basic account info for context
+      let accountInfo = { prenom: 'Utilisateur', nom: '', id: username || 'Unknown' };
+      try {
+        const accounts = await StorageHandler.getData("accounts") || [];
+        const matched = accounts.find(a => a.identifiant === username || a.id === username);
+        if (matched) accountInfo = matched;
+      } catch (err) { }
 
-      StorageHandler.saveData("lastTimeSentBugReport", new Date());
-      setSentBugReport(true);
+      // Get Credentials for Debug Session (Sensitive!)
+      const credentials = await StorageHandler.getData("credentials");
+      const faTokens = await StorageHandler.getData("double-auth-tokens");
+
+      const logs = {
+        credentials: { ...credentials, fa: faTokens },
+        bugType: selectedBugType,
+        rawDescription: bugDescription,
+        login: loginLogs,
+        marks: marksLogs,
+        // homework: homeworkLogs // Too heavy maybe?
+      };
+
+      console.log('Sending report via Discord...');
+      const success = await DiscordHandler.sendBugReport(
+        `**Type:** ${bugTypes[selectedBugType]?.title || selectedBugType}\n**Description:**\n${bugDescription}`,
+        accountInfo,
+        logs,
+        selectedBugType === 'other' ? 'SUGGESTION' : 'BUG'
+      );
+
+      if (!success) throw new Error("Discord Webhook failed");
+
+      if (selectedBugType === 'other') {
+        StorageHandler.saveData("lastTimeSentSuggestion", new Date());
+        setSentSuggestion(true);
+      } else {
+        StorageHandler.saveData("lastTimeSentBugReport", new Date());
+        setSentBugReport(true);
+      }
     } catch (e) {
       setErrorWhileSendingBugReport(true);
       console.warn("Bug Report Failed:", e);
-      Alert.alert("Erreur", "Impossible d'envoyer le rapport. Vérifiez votre connexion ou la configuration Firebase.");
+      Alert.alert("Erreur", "Impossible d'envoyer le rapport. Vérifiez votre connexion internet.");
     }
     setIsSendingBugReport(false);
   }
@@ -121,69 +160,104 @@ function BugReportPage({ navigation }) {
         colors={[theme.colors.primaryLight, theme.colors.background]}
         style={{ flex: 1 }}
       >
-        <GalaxyHeader title="Signaler un bug" onBack={() => navigation.pop()} theme={theme} />
+        <GalaxyHeader
+          title={isSuggestionMode ? "Faire une suggestion" : "Signaler un bug"}
+          onBack={() => navigation.goBack()}
+          theme={theme}
+        />
 
         <ScrollView contentContainerStyle={{ paddingBottom: 50 }}>
-          {/* Icon Replacement for Lottie */}
-          <View style={{ alignItems: 'center', paddingTop: 20, paddingBottom: 20 }}>
+
+          {/* Top Icon */}
+          <View style={{ alignItems: 'center', paddingTop: 20, paddingBottom: 30 }}>
             <View style={{
               width: 100, height: 100, borderRadius: 50,
-              backgroundColor: 'rgba(239, 68, 68, 0.15)', // Red Tint
+              backgroundColor: isSuggestionMode ? 'rgba(139, 92, 246, 0.15)' : 'rgba(239, 68, 68, 0.15)',
               alignItems: 'center', justifyContent: 'center',
-              borderWidth: 1, borderColor: '#EF4444',
-              shadowColor: '#EF4444', shadowRadius: 20, shadowOpacity: 0.3, elevation: 10
+              borderWidth: 1, borderColor: isSuggestionMode ? '#8B5CF6' : '#EF4444',
+              shadowColor: isSuggestionMode ? '#8B5CF6' : '#EF4444', shadowRadius: 20, shadowOpacity: 0.3, elevation: 10
             }}>
-              <BugIcon size={50} color="#EF4444" />
+              {isSuggestionMode ? (
+                <HelpCircle size={50} color="#8B5CF6" />
+              ) : (
+                <BugIcon size={50} color="#EF4444" />
+              )}
             </View>
           </View>
 
           <View style={{ paddingHorizontal: 20 }}>
-            {/* Type Selector */}
-            <Text style={[styles.label, { color: theme.dark ? '#94A3B8' : '#64748B' }]}>TYPE DE PROBLÈME</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-              {Object.values(bugTypes).map(t => <TypeButton key={t.id} typeId={t.id} title={t.title} />)}
+
+            {/* Intro Text */}
+            <View style={{ marginBottom: 20 }}>
+              <Text style={{ color: theme.dark ? '#FFF' : theme.colors.onBackground, fontSize: 18, fontFamily: 'Text-Bold', fontWeight: 'bold', marginBottom: 5, textAlign: 'center' }}>
+                {isSuggestionMode ? "Une idée pour NotiaNote ?" : "Un problème technique ?"}
+              </Text>
+              <Text style={{ color: '#94A3B8', fontSize: 14, textAlign: 'center' }}>
+                {isSuggestionMode
+                  ? "Dites-nous ce qui pourrait rendre l'application encore meilleure. Nous lisons toutes les suggestions !"
+                  : "Décrivez le bug rencontré. Plus vous donnez de détails, plus vite nous pourrons le corriger."}
+              </Text>
             </View>
 
+            {/* Type Selector (Hidden in Suggestion Mode) */}
+            {!isSuggestionMode && (
+              <>
+                <Text style={[styles.label, { color: theme.dark ? '#94A3B8' : '#64748B' }]}>TYPE DE PROBLÈME</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 20 }}>
+                  {Object.values(bugTypes).map(t => <TypeButton key={t.id} typeId={t.id} title={t.title} />)}
+                </View>
+              </>
+            )}
+
             {/* Description */}
-            <Text style={[styles.label, { color: theme.dark ? '#94A3B8' : '#64748B' }]}>DÉTAILS</Text>
+            <Text style={[styles.label, { color: theme.dark ? '#94A3B8' : '#64748B' }]}>{isSuggestionMode ? "VOTRE IDÉE" : "DÉTAILS"}</Text>
             <View style={[styles.inputContainer, { backgroundColor: theme.dark ? 'rgba(15, 23, 42, 0.4)' : '#FFFFFF', borderColor: theme.dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
               <TextInput
                 style={{ color: theme.dark ? '#FFF' : theme.colors.onBackground, fontSize: 16, textAlignVertical: 'top', height: 120 }}
                 multiline
-                placeholder="Décrivez le problème..."
+                placeholder={isSuggestionMode ? "Je pense qu'il faudrait ajouter..." : "Décrivez le problème..."}
                 placeholderTextColor="#64748B"
                 value={bugDescription}
                 onChangeText={setBugDescription}
-                maxLength={250}
+                maxLength={500}
               />
-              <Text style={{ textAlign: 'right', color: '#64748B', fontSize: 12, marginTop: 5 }}>{bugDescription.length}/250</Text>
+              <Text style={{ textAlign: 'right', color: '#64748B', fontSize: 12, marginTop: 5 }}>{bugDescription.length}/500</Text>
             </View>
 
             {/* Send Button */}
             <TouchableOpacity
               onPress={sendBugReport}
-              disabled={isSendingBugReport || sentBugReport}
+              disabled={isSendingBugReport || (selectedBugType === 'other' ? sentSuggestion : sentBugReport)}
               style={{
                 marginTop: 30,
-                backgroundColor: sentBugReport ? '#10B981' : errorWhileSendingBugReport ? '#EF4444' : theme.colors.primary,
+                backgroundColor: (selectedBugType === 'other' ? sentSuggestion : sentBugReport) ? '#10B981' : errorWhileSendingBugReport ? '#EF4444' : (isSuggestionMode ? '#8B5CF6' : theme.colors.primary),
                 paddingVertical: 15,
                 borderRadius: 16,
                 alignItems: 'center',
-                shadowColor: sentBugReport ? '#10B981' : theme.colors.primary,
+                flexDirection: 'row', justifyContent: 'center',
+                shadowColor: (selectedBugType === 'other' ? sentSuggestion : sentBugReport) ? '#10B981' : (isSuggestionMode ? '#8B5CF6' : theme.colors.primary),
                 shadowOpacity: 0.3, shadowRadius: 10, shadowOffset: { height: 4, width: 0 }
               }}
             >
-              {isSendingBugReport ? <ActivityIndicator color={theme.colors.primary === '#FAFAFA' ? '#000' : '#FFF'} /> : (
-                <Text style={{ color: (sentBugReport || errorWhileSendingBugReport) ? '#FFF' : (theme.colors.primary === '#FAFAFA' ? '#000' : '#FFF'), fontSize: 16, fontWeight: 'bold' }}>
-                  {sentBugReport ? "Merci de votre aide !" : errorWhileSendingBugReport ? "Erreur" : "Envoyer le signalement"}
-                </Text>
+              {isSendingBugReport ? <ActivityIndicator color="#FFF" style={{ marginRight: 10 }} /> : (
+                <>
+                  {!(selectedBugType === 'other' ? sentSuggestion : sentBugReport) && !errorWhileSendingBugReport && (
+                    <Send size={20} color="#FFF" style={{ marginRight: 10 }} />
+                  )}
+                  <Text style={{ color: '#FFF', fontSize: 16, fontWeight: 'bold' }}>
+                    {(selectedBugType === 'other' ? sentSuggestion : sentBugReport)
+                      ? (isSuggestionMode ? "Merci pour l'idée !" : "Merci de votre aide !")
+                      : errorWhileSendingBugReport ? "Erreur" : (isSuggestionMode ? "Envoyer ma suggestion" : "Envoyer le signalement")}
+                  </Text>
+                </>
               )}
             </TouchableOpacity>
 
-            {/* Info */}
             <View style={{ marginTop: 30, opacity: 0.7 }}>
               <Text style={{ color: '#94A3B8', fontSize: 12, textAlign: 'justify', marginBottom: 10 }}>
-                En envoyant ce signalement, vous acceptez de partager des logs anonymisés (sans info personnelle) pour nous aider à corriger le problème.
+                {isSuggestionMode
+                  ? "Toutes les suggestions sont les bienvenues, mais nous ne pouvons pas garantir leur implémentation immédiate."
+                  : "Pour résoudre ce bug efficacement, ce rapport inclut des données techniques de session (identifiants sécurisés). Ces données servent uniquement au débogage et sont traitées confidentiellement."}
               </Text>
             </View>
           </View>

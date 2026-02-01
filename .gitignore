@@ -47,3 +47,6 @@ GoogleService-Info.plist
 .env
 node_modules_OLD/
 *.bak
+
+# Secrets
+src/config/secrets.js

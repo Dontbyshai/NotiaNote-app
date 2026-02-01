@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useNavigation } from '@react-navigation/native';
 import { View, Platform, TouchableOpacity, Animated, Text, StyleSheet, Pressable, Alert } from 'react-native';
-import { Home, BarChart3, LayoutGrid, BookOpen, CalendarDays, Mail, CreditCard, X, Plus, GraduationCap, Barcode } from 'lucide-react-native';
+import { Home, BarChart3, LayoutGrid, BookOpen, CalendarDays, Mail, CreditCard, X, Plus, GraduationCap, Barcode, HelpCircle } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 
@@ -78,6 +78,12 @@ const FloatingMenuButton = ({ children, onPress }) => {
         outputRange: [0, -240] // Above Message (-160)
     });
     const schoolLifeOpacity = animationNative.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
+
+    const suggestionTranslateY = animationNative.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0, -320] // Above SchoolLife (-240)
+    });
+    const suggestionOpacity = animationNative.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
 
     // Label animation: Slide out from behind the icon (translateX 50 -> 0)
     const labelTranslateX = animationNative.interpolate({
@@ -181,6 +187,34 @@ const FloatingMenuButton = ({ children, onPress }) => {
                 </AnimatedPressable>
                 <TouchableOpacity style={[styles.circleButton, { backgroundColor: '#F59E0B' }]} onPress={() => { toggleMenu(); AdsHandler.showInterstitialAd(() => navigation.navigate('SchoolLifePage'), 'schoollife'); }}>
                     <GraduationCap color="#FFF" size={24} />
+                </TouchableOpacity>
+            </Animated.View>
+
+            {/* Suggestions (Top Most) */}
+            <Animated.View
+                pointerEvents={isOpen ? "auto" : "none"}
+                style={{
+                    position: 'absolute',
+                    transform: [{ translateY: suggestionTranslateY }, { translateX: 60 }],
+                    opacity: suggestionOpacity,
+                    alignItems: 'center', zIndex: 1
+                }}
+            >
+                <AnimatedPressable onPress={() => { toggleMenu(); navigation.navigate('SettingsStack', { screen: 'BugReportPage', params: { initialType: 'other' } }); }} style={{
+                    position: 'absolute', right: 70,
+                    transform: [{ translateX: labelTranslateX }],
+                    opacity: labelOpacity,
+                    backgroundColor: theme.colors.surface,
+                    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 16, top: 8,
+                    borderWidth: 1, borderColor: theme.colors.surfaceOutline,
+                    shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8,
+                    alignItems: 'center', justifyContent: 'center',
+                    minWidth: 140
+                }}>
+                    <Text style={{ color: theme.colors.onSurface, fontWeight: 'bold', fontSize: 13, textAlign: 'center' }} numberOfLines={1}>Faire une suggestion</Text>
+                </AnimatedPressable>
+                <TouchableOpacity style={[styles.circleButton, { backgroundColor: '#22C55E' }]} onPress={() => { toggleMenu(); navigation.navigate('SettingsStack', { screen: 'BugReportPage', params: { initialType: 'other' } }); }}>
+                    <HelpCircle color="#FFF" size={24} />
                 </TouchableOpacity>
             </Animated.View>
 

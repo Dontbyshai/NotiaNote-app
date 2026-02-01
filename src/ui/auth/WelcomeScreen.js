@@ -17,6 +17,7 @@ import {
     TextInput,
     ActivityIndicator,
     Easing,
+    KeyboardAvoidingView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -628,69 +629,73 @@ export default function WelcomeScreen({ navigation }) {
                             },
                         ]}
                     >
-
-
-                        <View style={styles.loginFormHandle} />
-
-                        <Text style={styles.loginFormTitle}>{selectedService === 'ecoledirecte' ? 'ECOLEDIRECTE' : 'CONNEXION'}</Text>
-
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.inputLabel}>Identifiant</Text>
-                            <View style={styles.inputWrapper}>
-                                <TextInput
-                                    style={styles.inputText}
-                                    placeholder="Nom d'utilisateur"
-                                    placeholderTextColor="#6B7280"
-                                    value={username}
-                                    onChangeText={setUsername}
-                                    autoCapitalize="none"
-                                />
-                            </View>
-                        </View>
-
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.inputLabel}>Mot de passe</Text>
-                            <View style={styles.inputWrapper}>
-                                <TextInput
-                                    style={styles.inputText}
-                                    placeholder="Mot de passe"
-                                    placeholderTextColor="#6B7280"
-                                    value={password}
-                                    onChangeText={setPassword}
-                                    secureTextEntry={!isPasswordVisible}
-                                />
-                                <TouchableOpacity onPress={() => setIsPasswordVisible(!isPasswordVisible)} style={{ padding: 4 }}>
-                                    {isPasswordVisible ?
-                                        <EyeOff size={20} color="#9CA3AF" /> :
-                                        <Eye size={20} color="#9CA3AF" />
-                                    }
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-
-                        <TouchableOpacity
-                            style={styles.loginButton}
-                            activeOpacity={0.8}
-                            onPress={handleLogin}
-                            disabled={isLoading}
+                        <KeyboardAvoidingView
+                            behavior={Platform.OS === "ios" ? "padding" : "height"}
+                            style={{ flex: 1, width: '100%' }}
+                            keyboardVerticalOffset={Platform.OS === "ios" ? 40 : 0} // Ajustement pour remonter un peu plus
                         >
-                            <LinearGradient
-                                colors={['#A855F7', '#3B82F6']}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 0 }}
-                                style={styles.loginButtonGradient}
-                            >
-                                {isLoading ? (
-                                    <ActivityIndicator color="#FFF" />
-                                ) : (
-                                    <Text style={styles.loginButtonText}>Se connecter</Text>
-                                )}
-                            </LinearGradient>
-                        </TouchableOpacity>
+                            <View style={styles.loginFormHandle} />
 
-                        <Text style={styles.loginDisclaimer}>
-                            Vos identifiants sont envoyés directement à EcoleDirecte via une connexion sécurisée.
-                        </Text>
+                            <Text style={styles.loginFormTitle}>{selectedService === 'ecoledirecte' ? 'ECOLEDIRECTE' : 'CONNEXION'}</Text>
+
+                            <View style={styles.inputContainer}>
+                                <Text style={styles.inputLabel}>Identifiant</Text>
+                                <View style={styles.inputWrapper}>
+                                    <TextInput
+                                        style={styles.inputText}
+                                        placeholder="Nom d'utilisateur"
+                                        placeholderTextColor="#6B7280"
+                                        value={username}
+                                        onChangeText={setUsername}
+                                        autoCapitalize="none"
+                                    />
+                                </View>
+                            </View>
+
+                            <View style={styles.inputContainer}>
+                                <Text style={styles.inputLabel}>Mot de passe</Text>
+                                <View style={styles.inputWrapper}>
+                                    <TextInput
+                                        style={styles.inputText}
+                                        placeholder="Mot de passe"
+                                        placeholderTextColor="#6B7280"
+                                        value={password}
+                                        onChangeText={setPassword}
+                                        secureTextEntry={!isPasswordVisible}
+                                    />
+                                    <TouchableOpacity onPress={() => setIsPasswordVisible(!isPasswordVisible)} style={{ padding: 4 }}>
+                                        {isPasswordVisible ?
+                                            <EyeOff size={20} color="#9CA3AF" /> :
+                                            <Eye size={20} color="#9CA3AF" />
+                                        }
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+
+                            <TouchableOpacity
+                                style={styles.loginButton}
+                                activeOpacity={0.8}
+                                onPress={handleLogin}
+                                disabled={isLoading}
+                            >
+                                <LinearGradient
+                                    colors={['#A855F7', '#3B82F6']}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 0 }}
+                                    style={styles.loginButtonGradient}
+                                >
+                                    {isLoading ? (
+                                        <ActivityIndicator color="#FFF" />
+                                    ) : (
+                                        <Text style={styles.loginButtonText}>Se connecter</Text>
+                                    )}
+                                </LinearGradient>
+                            </TouchableOpacity>
+
+                            <Text style={styles.loginDisclaimer}>
+                                Vos identifiants sont envoyés directement à EcoleDirecte via une connexion sécurisée.
+                            </Text>
+                        </KeyboardAvoidingView>
                     </Animated.View>
                 )
             }

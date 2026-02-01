@@ -89,6 +89,21 @@ function MarksOverview({
   }
   const evolution = getEvolutionData();
 
+  // Fallback Average Calculation (if API/Handler fails)
+  const realAverage = currentData.average ?? (() => {
+    let total = 0;
+    let count = 0;
+    Object.values(currentData.subjects || {}).forEach(s => {
+      // Check if subject has an average
+      if (s.average && !isNaN(parseFloat(s.average))) {
+        // For H000/dynamic periods, assume coeff 1 for simple display
+        total += parseFloat(s.average);
+        count++;
+      }
+    });
+    return count > 0 ? (total / count) : null;
+  })();
+
   return (
     <View style={{ marginHorizontal: 20 }}>
       {/* 1. Period Selector */}
@@ -97,32 +112,37 @@ function MarksOverview({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 15 }}
       >
-        {Object.values(periods).filter(p => Object.keys(p.marks || {}).length > 0).map((period) => {
-          const isSelected = selectedPeriod === period.id;
-          return (
-            <TouchableOpacity
-              key={period.id}
-              onPress={() => setSelectedPeriod(period.id)}
-              style={{
-                backgroundColor: isSelected ? theme.colors.primary : (theme.dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'),
-                paddingVertical: 8,
-                paddingHorizontal: 16,
-                borderRadius: 20,
-                marginRight: 10,
-                borderWidth: 1,
-                borderColor: isSelected ? theme.colors.primary : (theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)')
-              }}
-            >
-              <Text style={{
-                color: isSelected ? (theme.colors.primary === '#FAFAFA' ? '#000' : '#FFF') : '#94A3B8',
-                fontFamily: 'Text-Bold',
-                fontSize: 14
-              }}>
-                {period.title}
-              </Text>
-            </TouchableOpacity>
-          )
-        })}
+        {Object.values(periods)
+          .filter(p => Object.keys(p.marks || {}).length > 0)
+          .map((period) => {
+            const isSelected = selectedPeriod === period.id;
+            let displayTitle = period.title;
+            if (displayTitle === "H000") displayTitle = "Période Annexe";
+
+            return (
+              <TouchableOpacity
+                key={period.id}
+                onPress={() => setSelectedPeriod(period.id)}
+                style={{
+                  backgroundColor: isSelected ? theme.colors.primary : (theme.dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'),
+                  paddingVertical: 8,
+                  paddingHorizontal: 16,
+                  borderRadius: 20,
+                  marginRight: 10,
+                  borderWidth: 1,
+                  borderColor: isSelected ? theme.colors.primary : (theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)')
+                }}
+              >
+                <Text style={{
+                  color: isSelected ? (theme.colors.primary === '#FAFAFA' ? '#000' : '#FFF') : '#94A3B8',
+                  fontFamily: 'Text-Bold',
+                  fontSize: 14
+                }}>
+                  {displayTitle}
+                </Text>
+              </TouchableOpacity>
+            )
+          })}
       </ScrollView>
 
       {/* 2. Average Cards */}
@@ -144,7 +164,7 @@ function MarksOverview({
         }}>
           <Text style={{ color: theme.colors.onSurfaceDisabled || '#94A3B8', fontSize: 11, fontFamily: 'Text-Medium', marginBottom: 5 }}>Moyenne Générale</Text>
           <Text style={{ color: theme.colors.onSurface || '#FFF', fontSize: 28, fontFamily: 'Text-Bold', fontWeight: 'bold' }}>
-            {formatAverage(currentData.average)}
+            {formatAverage(realAverage)}
             {evolution && (
               <Text style={{ fontSize: 20, color: evolution.color }}>
                 {" "}{evolution.icon}

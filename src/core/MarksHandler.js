@@ -32,20 +32,40 @@ class MarksHandler {
         }
 
         if (activePeriodKey && periods[activePeriodKey]) {
-          return {
-            general: periods[activePeriodKey].average,
-            class: periods[activePeriodKey].classAverage,
-            periodName: periods[activePeriodKey].title,
-            history: periods[activePeriodKey].averageHistory,
-          };
+          const period = periods[activePeriodKey];
+          let finalAverage = period.average;
+
+          // Fallback Calculation if official average is missing
+          if ((!finalAverage || isNaN(finalAverage)) && period.subjects) {
+            let total = 0;
+            let count = 0;
+            Object.values(period.subjects).forEach(s => {
+              if (s.average && !isNaN(parseFloat(s.average))) {
+                total += parseFloat(s.average);
+                count++;
+              }
+            });
+            if (count > 0) finalAverage = (total / count);
+          }
+
+          // If valid average found, return it
+          if (finalAverage && !isNaN(finalAverage)) {
+            return {
+              general: finalAverage,
+              class: period.classAverage,
+              periodName: period.title === "H000" ? "Période Annexe" : period.title,
+              history: period.averageHistory,
+            };
+          }
         }
       }
 
-      // Fallback to "YEAR" only if no real periods found
+      // Fallback to "YEAR" if active period average is broken OR if no real periods found
       if (periods["YEAR"]) {
         return {
           general: periods["YEAR"].average,
           class: periods["YEAR"].classAverage,
+          periodName: "Année", // Force title
           history: periods["YEAR"].averageHistory,
         };
       }
@@ -222,7 +242,9 @@ class MarksHandler {
             subjectTeachers.push(teacher.nom);
           }
 
-          let subjectAppreciations = (subject.appreciations ?? []).map(parseHtmlData).filter(a => a.length > 0);
+          // Secure map
+          let rawAppro = subject.appreciations;
+          let subjectAppreciations = (Array.isArray(rawAppro) ? rawAppro : []).map(parseHtmlData).filter(a => a.length > 0);
 
           if (subSubjectID) {
             // Is a SubSubject
@@ -450,7 +472,7 @@ class MarksHandler {
         periods[periodID] = createPeriod(
           periodID,
           periodID,
-          true,
+          false, // isFinished (force false to ensure calc)
           tempSubjects,
           {},
           [],

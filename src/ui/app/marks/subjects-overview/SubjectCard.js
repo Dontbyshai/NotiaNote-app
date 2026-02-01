@@ -63,7 +63,10 @@ function EmbeddedSubjectCard({
   const evolution = getEvolutionData();
 
   // Parse appreciations
-  const appreciationText = (subject.appreciations || []).map(a => {
+  // Secure access to appreciations (API can return strings or non-arrays)
+  const rawAppreciations = subject.appreciations;
+  const appreciationsArray = Array.isArray(rawAppreciations) ? rawAppreciations : [];
+  const appreciationText = appreciationsArray.map(a => {
     // Already decoded in MarksHandler
     // Wait, MarksHandler stored decoded strings?
     // Let's check MarksHandler again. Yes: .map(parseHtmlData).

@@ -2335,7 +2335,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - RNWorklets (0.5.1):
+  - RNWorklets (0.7.2):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2357,9 +2357,9 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
-    - RNWorklets/worklets (= 0.5.1)
+    - RNWorklets/worklets (= 0.7.2)
     - Yoga
-  - RNWorklets/worklets (0.5.1):
+  - RNWorklets/worklets (0.7.2):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2381,9 +2381,9 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
-    - RNWorklets/worklets/apple (= 0.5.1)
+    - RNWorklets/worklets/apple (= 0.7.2)
     - Yoga
-  - RNWorklets/worklets/apple (0.5.1):
+  - RNWorklets/worklets/apple (0.7.2):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2874,7 +2874,7 @@ SPEC CHECKSUMS:
   RNSslPinning: 19ba950a15324b874ae11be2135ae11e0fb5f702
   RNSVG: 31d6639663c249b7d5abc9728dde2041eb2a3c34
   RNVectorIcons: 4351544f100d4f12cac156a7c13399e60bab3e26
-  RNWorklets: 76fce72926e28e304afb44f0da23b2d24f2c1fa0
+  RNWorklets: 2fb11aebe21ea76d0c5456e92d2f23e0cad91a68
   UMAppLoader: 145337733539f9af9b3dd97eeaa7f3bd97cacb23
   Yoga: 5934998fbeaef7845dbf698f698518695ab4cd1a
   ZXingObjC: 8898711ab495761b2dbbdec76d90164a6d7e14c5

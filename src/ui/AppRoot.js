@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import useState from "react-usestateref";
-import { StatusBar, useColorScheme, View, ActivityIndicator, Text } from "react-native";
+import { StatusBar, useColorScheme, View, ActivityIndicator, Text, Platform } from "react-native";
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useNavigation, NavigationContainer, DefaultTheme, DarkTheme } from "@react-navigation/native";
 import * as SplashScreen from "expo-splash-screen";
@@ -16,6 +16,7 @@ import ColorsHandler from "../core/ColorsHandler";
 import CoefficientHandler from "../core/CoefficientHandler";
 import AccountHandler from "../core/AccountHandler";
 import StorageHandler from "../core/StorageHandler";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import BiometricLock from "./components/BiometricLock";
 
 
@@ -78,6 +79,25 @@ function AppRoot() {
 
       // Check if logged-in
       console.log("(AppRoot) Checking credentials...");
+
+      // TEMPORARY: Force cleanup of corrupted credentials on ALL platforms (V4)
+      const needsCleanup = await StorageHandler.getData("global_cleanup_v4");
+      if (needsCleanup !== false) {
+        console.log(`(AppRoot) Force cleanup V4 for ${Platform.OS}...`);
+
+        // Delete new format (platform prefixed)
+        await StorageHandler.deleteFiles(["credentials", "accounts", "selectedAccount"]);
+
+        // Delete old format (legacy) directly with AsyncStorage to kill the contamination source
+        const legacyKeys = ["credentials", "accounts", "selectedAccount"];
+        for (const key of legacyKeys) {
+          await AsyncStorage.removeItem(key);
+        }
+
+        await StorageHandler.saveData("global_cleanup_v4", false);
+        console.log(`(AppRoot) Cleanup V4 complete. Please log in again.`);
+      }
+
       const credentialsExist = await StorageHandler.dataExists("credentials");
       // TEMPORAIRE: Désactiver l'auto-login pour les tests
       if (credentialsExist) {

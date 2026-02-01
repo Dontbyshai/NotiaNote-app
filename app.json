@@ -73,7 +73,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.dontbyshai.notianote",
-      "buildNumber": "5",
+      "buildNumber": "6",
       "userInterfaceStyle": "automatic",
       "infoPlist": {
         "NSCameraUsageDescription": "NotiaNote a besoin de la caméra pour scanner votre carte de cantine.",

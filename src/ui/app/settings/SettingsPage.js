@@ -215,6 +215,8 @@ function SettingsPage({ navigation }) {
             </View>
           </TouchableOpacity>
 
+
+
           {/* Section 1: PERSONNALISATION */}
           <Text style={[styles.sectionTitle, { color: theme.dark ? '#94A3B8' : '#64748B' }]}>PERSONNALISATION</Text>
           <View style={[styles.sectionContainer, { backgroundColor: theme.dark ? 'rgba(15, 23, 42, 0.4)' : '#FFFFFF', borderColor: theme.dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
