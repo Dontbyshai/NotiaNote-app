@@ -272,28 +272,59 @@ export default function HomePage({ navigation }) {
         try {
             console.log('[HomePage] Loading timetable...');
             const today = new Date();
-            // Load a wider range to be sure (current week)
+            const dayOfWeek = today.getDay(); // 0 = Sunday, 6 = Saturday
+            let targetDate = new Date(today);
+            let titlePrefix = "Aujourd'hui";
+
+            // SMART WEEKEND LOGIC:
+            // If it's Saturday or Sunday, show Monday's schedule by default if today is empty?
+            // Actually, let's look for NEXT MONDAY if today is weekend.
+
+            if (dayOfWeek === 6) { // Saturday
+                // Check if we have classes today first? Usually schools have Wednesday/Saturday classes sometimes.
+                // Let's stick to standard: If weekend, show Monday.
+                targetDate.setDate(today.getDate() + 2); // Monday
+                titlePrefix = "Lundi";
+            } else if (dayOfWeek === 0) { // Sunday
+                targetDate.setDate(today.getDate() + 1); // Monday
+                titlePrefix = "Demain (Lundi)";
+            }
+
+            // Load current week AND next week to be safe
             const startOfWeek = new Date(today);
-            startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Monday
-            const endOfWeek = new Date(startOfWeek);
-            endOfWeek.setDate(startOfWeek.getDate() + 6); // Sunday
+            startOfWeek.setDate(today.getDate() - today.getDay() + 1);
+            const endOfNextWeek = new Date(startOfWeek);
+            endOfNextWeek.setDate(startOfWeek.getDate() + 14);
 
             const startStr = TimetableHandler.formatDate(startOfWeek);
-            const endStr = TimetableHandler.formatDate(endOfWeek);
+            const endStr = TimetableHandler.formatDate(endOfNextWeek);
 
             console.log(`[HomePage] Fetching timetable from ${startStr} to ${endStr}`);
             let allLessons = await TimetableHandler.getTimetable(accountID, startStr, endStr);
-            allLessons = allLessons || []; // Secure array if null/undefined
+            allLessons = allLessons || [];
 
-            // Filter locally for today to keep UI logic consistent for now, but inspect all data
-            const todayStr = TimetableHandler.formatDate(today);
-            let lessons = allLessons.filter(l => l.start_date.startsWith(todayStr));
+            // Targeted Filtering
+            const targetDateStr = TimetableHandler.formatDate(targetDate);
+            let lessons = allLessons.filter(l => l.start_date.startsWith(targetDateStr));
+
+            // If target was today (e.g. Saturday) but empty, try Monday?
+            if (lessons.length === 0 && (dayOfWeek === 6 || dayOfWeek === 0)) {
+                // Fallback to Monday if weekend is empty
+                const nextMonday = new Date(today);
+                nextMonday.setDate(today.getDate() + (8 - dayOfWeek)); // Calculate next Monday
+                if (dayOfWeek === 0) nextMonday.setDate(today.getDate() + 1); // already handled above but safe logic
+
+                const nextMondayStr = TimetableHandler.formatDate(nextMonday);
+                lessons = allLessons.filter(l => l.start_date.startsWith(nextMondayStr));
+                if (lessons.length > 0) {
+                    titlePrefix = "Lundi Prochain";
+                }
+            }
 
             console.log('[HomePage] Total lessons fetched:', allLessons?.length || 0);
-            console.log('[HomePage] Lessons for today:', lessons?.length || 0);
+            console.log(`[HomePage] Lessons for ${titlePrefix}:`, lessons?.length || 0);
 
             if (lessons && Array.isArray(lessons)) {
-                // Keep all lessons to show cancellations/changes
                 const validLessons = lessons;
                 validLessons.sort((a, b) => a.start_date.localeCompare(b.start_date));
 
@@ -301,9 +332,8 @@ export default function HomePage({ navigation }) {
                     l.color = resolveColor(l.codeMatiere, l.matiere);
                 });
 
-                console.log('[HomePage] Valid lessons:', validLessons.length);
                 setTodayLessons(validLessons);
-                setStats(prev => ({ ...prev, courseCount: validLessons.length }));
+                setStats(prev => ({ ...prev, courseCount: validLessons.length, scheduleTitle: titlePrefix }));
             }
         } catch (e) {
             console.warn("Timetable fetch failed", e);
@@ -449,14 +479,19 @@ export default function HomePage({ navigation }) {
                     <RefreshControl
                         refreshing={refreshing}
                         onRefresh={loadAllData}
-                        tintColor="#a78bfa"
-                        colors={['#a78bfa']}
+                        tintColor={theme.colors.primary}
+                        title="Mise à jour..."
+                        titleColor={theme.colors.onSurfaceDisabled}
+                        colors={[theme.colors.primary]}
+                        progressViewOffset={insets.top + 20}
                     />
                 }
+                contentInset={{ top: insets.top - 30 }}
+                contentOffset={{ x: 0, y: -(insets.top - 30) }}
                 contentContainerStyle={{ paddingBottom: 120 }}
             >
                 {/* Hero Header */}
-                <View style={{ paddingTop: insets.top + 25, paddingHorizontal: 20, marginBottom: 35 }}>
+                <View style={{ paddingTop: 55, paddingHorizontal: 20, marginBottom: 35 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 25 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <CustomProfilePhoto size={52} accountID={accountID} onPress={() => navigation.navigate("SettingsStack")} />
@@ -700,7 +735,7 @@ export default function HomePage({ navigation }) {
                 {/* Today's Schedule */}
                 <View style={{ marginBottom: 35 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 18 }}>
-                        <Text style={{ color: theme.colors.onBackground, fontSize: 20, fontWeight: '800' }}>📅 Aujourd'hui</Text>
+                        <Text style={{ color: theme.colors.onBackground, fontSize: 20, fontWeight: '800' }}>📅 {stats.scheduleTitle || "Aujourd'hui"}</Text>
                         <TouchableOpacity onPress={() => navigation.navigate("CalendarTab")}>
                             <Text style={{ color: '#a78bfa', fontSize: 14, fontWeight: '600' }}>Voir tout →</Text>
                         </TouchableOpacity>

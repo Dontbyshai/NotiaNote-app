@@ -3,7 +3,7 @@
     "name": "NotiaNote",
     "slug": "notianote",
     "scheme": "notianote",
-    "version": "4.0.22",
+    "version": "2.0.2",
     "orientation": "portrait",
     "icon": "./assets/notianote-violet-icon.png",
     "userInterfaceStyle": "automatic",
@@ -17,10 +17,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "e17b020c-b1bf-4f61-9fa6-7bf681626451"
+        "projectId": "029af763-55a2-4e12-a250-19c1391b9a3b"
       }
     },
-    "owner": "finocchiarodev",
     "plugins": [
       [
         "expo-build-properties",
@@ -64,23 +63,24 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.dontbyshai.notianote",
-      "versionCode": 57,
-      "userInterfaceStyle": "automatic"
+      "versionCode": 58,
+      "userInterfaceStyle": "automatic",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.dontbyshai.notianote",
-      "buildNumber": "4",
+      "buildNumber": "5",
       "userInterfaceStyle": "automatic",
       "infoPlist": {
         "NSCameraUsageDescription": "NotiaNote a besoin de la caméra pour scanner votre carte de cantine.",
         "GADApplicationIdentifier": "ca-app-pub-5759305174337781~8976608670",
-        "NSUserTrackingUsageDescription": "Autorisez-vous les publicités personnalisées sur NotiaNote ?"
+        "NSUserTrackingUsageDescription": "Autorisez-vous les publicités personnalisées sur NotiaNote ?",
+        "ITSAppUsesNonExemptEncryption": false
       }
     }
-  },
-  "react-native-google-mobile-ads": {
-    "android_app_id": "ca-app-pub-5759305174337781~8980538178",
-    "ios_app_id": "ca-app-pub-5759305174337781~8976608670"
   }
 }

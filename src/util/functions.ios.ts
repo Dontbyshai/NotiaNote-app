@@ -1,48 +1,55 @@
-import { Platform } from "react-native";
-let sslFetch;
-// Enable for both iOS and Android
-if (Platform.OS == "ios" || Platform.OS == "android") {
-    try {
-        const { fetch } = require("react-native-ssl-pinning");
-        sslFetch = fetch;
-    } catch (e) {
-        console.warn("react-native-ssl-pinning not found/loaded in functions.ios.ts");
-    }
-}
 
+// IOS SPECIFIC NETWORKING - AXIOS IMPLEMENTATION
 import axios from "axios";
 import StorageHandler from "../core/StorageHandler";
-import APIEndpoints from "../core/APIEndpoints";
 
+// Note: Using standard Axios which works reliably.
 
-// Parse ÉcoleDirecte - iOS Specific (Axios)
 function useSecureFetch(url: string): boolean {
-    return false; // Force Axios on iOS
+    return false; // Disable "Secure Fetch" logic for downstream
 }
 
 async function fetchED(url: string, { method, headers, body = null, parseJson = true }) {
-    if (useSecureFetch(url) && sslFetch) {
-        // Unused block in iOS file but kept for structure
-        return sslFetch(url, {
-            method: method,
-            timeoutInterval: 10000,
-            sslPinning: { certs: [] },
-            headers: headers,
-            body: (body == null) ? undefined : body,
-            disableAllSecurity: true,
-        }).then(response => {
-            let data = response.bodyString;
-            if (parseJson && typeof data === 'string' && data.length > 0) {
-                try { data = JSON.parse(data); } catch (e) { }
-            }
-            return { status: response.status, data: data, headers: response.headers };
-        }).catch(err => { throw err; });
-    } else {
-        // Always used on iOS
-        if (method == "GET") {
-            return axios.get(url, { headers: headers });
+    console.log(`[Axios] iOS Request to ${url}`);
+
+    // Config object for Axios
+    const config = {
+        headers: headers
+    };
+
+    try {
+        let response;
+        if (method === "GET") {
+            response = await axios.get(url, config);
         } else {
-            return axios.post(url, body, { headers: headers });
+            // POST/PUT/etc
+            response = await axios.post(url, body, config);
+        }
+
+        // Axios parses JSON by default in response.data
+        // We need to normalize it to the shape the app expects: { status, data, headers }
+        // The app expects 'data' to be the parsed object.
+
+        return {
+            status: response.status,
+            data: response.data,
+            headers: response.headers
+        };
+    } catch (error) {
+        console.warn("[Axios] Error:", error.message);
+        if (error.response) {
+            console.warn("[Axios] Server responded with:", error.response.status, error.response.data);
+            // Return the error response structure if available, so app logic (like 520 handling) can work
+            return {
+                status: error.response.status,
+                data: error.response.data,
+                headers: error.response.headers
+            };
+        } else if (error.request) {
+            console.warn("[Axios] No response received", error.request);
+            throw new Error("Network Error: No response received");
+        } else {
+            throw error;
         }
     }
 }
@@ -61,62 +68,59 @@ async function getGtkToken(urlBase: string): Promise<{ gtk: string; cookie: stri
                 "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
                 "Accept": "application/json, text/plain, */*",
                 "Accept-Encoding": "identity",
-                "Host": "api.ecoledirecte.com",
-                "Connection": "keep-alive",
             },
         });
 
-        var res = { gtk: "", cookie: "" };
-        // Handle both cases for headers
-        const setCookieHeader = response.headers["Set-Cookie"] || response.headers["set-cookie"];
+        // If request failed/returned empty structure
+        if (!response || !response.headers) return { gtk: "", cookie: "" };
 
-        if (!setCookieHeader) {
-            console.warn("No Set-Cookie header found");
-            return { gtk: "", cookie: "" };
-        }
+        var res = { gtk: "", cookie: "" };
+        const setCookieHeader = response.headers["set-cookie"] || response.headers["Set-Cookie"];
+
+        if (!setCookieHeader) return { gtk: "", cookie: "" };
 
         const cookiePart = Array.isArray(setCookieHeader) ? setCookieHeader[0] : setCookieHeader;
+        let cookieString = String(cookiePart);
 
-        if (!cookiePart) {
-            throw new Error("Empty cookie part");
-        }
-
-        // Parsing ROBUSTE
-        let cookieString = "";
-        if (Array.isArray(setCookieHeader)) {
-            cookieString = setCookieHeader.join("; ");
-        } else {
-            cookieString = String(setCookieHeader);
-        }
-
-        // Regex pour trouver "GTK=xxxxx;"
+        // Regex parsing
         const gtkMatch = cookieString.match(/GTK=([^;]+)/);
 
         if (gtkMatch && gtkMatch[1]) {
             const XGTK = gtkMatch[1];
-            res = { gtk: XGTK, cookie: cookieString };
+
+            // SMART CLEANING: iOS Axios sends headers EXACTLY as provided.
+            // Sending "Path=/" or "Domain=..." in a Cookie REQUEST header is invalid HTTP.
+            // Android networking stack likely strips these automatically, but iOS doesn't.
+            // We MUST clean them manually here.
+
+            const cleanCookie = (raw: string) => {
+                return raw.split(/[,;]/)
+                    .map(p => p.trim())
+                    .filter(p => {
+                        const low = p.toLowerCase();
+                        if (!low.includes('=')) return false;
+                        const key = low.split('=')[0].trim();
+                        // Noms d'attributs cookies indésirables dans une REQUÊTE
+                        const blacklist = ['path', 'domain', 'expires', 'max-age', 'samesite', 'priority', 'secure', 'httponly'];
+                        return !blacklist.includes(key);
+                    })
+                    .join('; ');
+            };
+
+            const smartCookie = cleanCookie(cookieString);
+
+            res = { gtk: XGTK, cookie: smartCookie };
             await StorageHandler.saveData("gtk", res);
         } else {
-            console.warn("Could not find GTK in cookies via Regex, trying permissive fallback");
+            // Fallback parsing
             try {
                 const firstPart = cookieString.split(';')[0];
                 if (firstPart && firstPart.includes('=')) {
-                    const parts = firstPart.split('=');
-                    const candidate1 = parts[0];
-                    const candidate2 = parts[1];
-                    const XGTK = candidate2.length > candidate1.length ? candidate2 : candidate1;
-                    const cleanCookie = `${firstPart}`;
-                    res = { gtk: XGTK, cookie: cleanCookie };
-                    await StorageHandler.saveData("gtk", res);
-                } else {
-                    const XGTK = firstPart;
-                    res = { gtk: XGTK, cookie: firstPart };
+                    const XGTK = firstPart.split('=')[1];
+                    res = { gtk: XGTK, cookie: cookieString };
                     await StorageHandler.saveData("gtk", res);
                 }
-            } catch (e) {
-                console.warn("Permissive fallback exception:", e);
-                return { gtk: "", cookie: "" };
-            }
+            } catch (e) { }
         }
 
         return res;
@@ -132,17 +136,18 @@ async function doLogin(username: string, password: string, gtk: string, cookie: 
     url.searchParams.set("v", "4.75.0");
 
     const body = {
-        identifiant: encodeURIComponent(username),
-        motdepasse: encodeURIComponent(password),
+        identifiant: username.trim(),
+        motdepasse: password.trim(),
         isReLogin: false,
         uuid: "",
         fa: [{ cn: cn, cv: cv }],
         cn: cn, cv: cv
     };
 
-    /* Login Body Standard (Axios-compatible) */
-    // iOS FIX: ENCODE THE JSON BODY FOR AXIOS
-    const requestBody = `data=${encodeURIComponent(JSON.stringify(body))}`;
+    // Important: EcoleDirecte expects form-urlencoded body with a 'data' key containing the JSON
+    const bodyStr = JSON.stringify(body);
+    // Aligning Android with iOS standard fix
+    const requestBody = `data=${encodeURIComponent(bodyStr)}`;
 
     const loginResponse = await fetchED(url.toString(), {
         method: "POST",
@@ -150,35 +155,13 @@ async function doLogin(username: string, password: string, gtk: string, cookie: 
         headers: {
             "Accept": "application/json, text/plain, */*",
             "Content-Type": "application/x-www-form-urlencoded",
+            // REVERT TO IPHONE USER AGENT (Standard)
             "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
             "X-Gtk": gtk ?? "---",
             "Cookie": cookie ?? "---",
             "Accept-Encoding": "gzip, compress, deflate, br",
-            "Host": "api.ecoledirecte.com",
-            "Connection": "keep-alive",
             "2fa-Token": twoFAToken,
         },
-    }).then(async (response) => {
-        let parsedData = response.data;
-        if (useSecureFetch(url.toString())) {
-            try {
-                if (typeof response.json === 'function') {
-                    parsedData = await response.json();
-                } else if (response.bodyString) {
-                    parsedData = JSON.parse(response.bodyString);
-                } else if (typeof response.data === 'string') {
-                    parsedData = JSON.parse(response.data);
-                }
-            } catch (e) {
-                console.warn("Error parsing response JSON", e);
-                parsedData = response.data || {};
-            }
-        }
-        return {
-            status: response.status,
-            data: parsedData,
-            headers: response.headers,
-        };
     }).catch((error) => {
         onError(error);
         return;
