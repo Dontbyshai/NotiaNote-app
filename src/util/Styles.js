@@ -106,6 +106,7 @@ class Themes {
       surfaceOutline: '#27272a', // Zinc 800
       primary: '#FAFAFA',    // Zinc 50 (Off-white)
       primaryLight: '#27272a', // Zinc 800 (for subtle gradient)
+      onPrimary: '#000000',  // Fix contrast on white button
       onBackground: '#FAFAFA',
       onSurface: '#E4E4E7',  // Zinc 200
     }

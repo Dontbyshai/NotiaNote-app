@@ -20,7 +20,9 @@ if (Platform.OS === 'android') {
 export default function SchoolLifePage() {
     const insets = useSafeAreaInsets();
     const navigation = useNavigation();
-    const { accountID } = useCurrentAccountContext();
+    const { accountID: contextAccountID, mainAccount } = useCurrentAccountContext();
+    // Fix: Calculate effective ID to handle cases where contextAccountID is undefined
+    const accountID = (contextAccountID && contextAccountID !== "undefined") ? contextAccountID : ((mainAccount?.id && mainAccount.id !== "undefined") ? mainAccount.id : null);
     const { theme } = useGlobalAppContext();
     const [loading, setLoading] = useState(true);
 
@@ -45,6 +47,9 @@ export default function SchoolLifePage() {
                 // IMPORTANT: EcoleDirecte payload is usually inside response.data.data
                 // response.data is the axios payload { code: 200, data: {...} }
                 const payload = response.data.data || response.data;
+                console.log("[SchoolLife] Payload keys:", Object.keys(payload));
+                if (payload.absencesRetards) console.log("[SchoolLife] Absences/Retards count:", payload.absencesRetards.length);
+                if (payload.sanctionsEncouragements) console.log("[SchoolLife] Sanctions count:", payload.sanctionsEncouragements.length);
                 processData(payload);
             } else {
                 console.warn("SchoolLife fetch failed:", response);
@@ -64,7 +69,11 @@ export default function SchoolLifePage() {
 
         // Absences & Retards
         if (data.absencesRetards) {
+            if (data.absencesRetards.length > 0) {
+                console.log("[SchoolLife] Item structure:", Object.keys(data.absencesRetards[0]));
+            }
             data.absencesRetards.forEach(item => {
+                console.log(`[SchoolLife] Processing item type: '${item.typeElement}'`);
                 const formatted = { ...item, type: item.typeElement };
                 if (item.typeElement === "Retard") {
                     newDelays.push(formatted);

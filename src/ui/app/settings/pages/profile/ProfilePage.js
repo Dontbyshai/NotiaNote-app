@@ -36,12 +36,55 @@ const GalaxyHeader = ({ title, onBack, theme }) => {
     </View>
   );
 };
+// --- NEW COMPONENT: Highlights ---
+const ProfileHighlights = ({ mainAccount, theme }) => {
+  const [average, setAverage] = useState(null);
+
+  useEffect(() => {
+    StorageHandler.getData("marks").then(data => {
+      // Try to find general average "TRIMESTRE 2" or general
+      if (data?.averages?.student) {
+        setAverage(data.averages.student);
+      }
+    });
+  }, []);
+
+  if (!average) return null;
+
+  return (
+    <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
+      {/* Mini Stat Card */}
+      <View style={{
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+        backgroundColor: theme.colors.primary, borderRadius: 16, padding: 15,
+        shadowColor: theme.colors.primary, shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 4
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
+            <Text style={{ fontSize: 18 }}>🏆</Text>
+          </View>
+          <View>
+            <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '600' }}>MOYENNE GÉNÉRALE</Text>
+            <Text style={{ color: '#FFF', fontSize: 20, fontFamily: 'Text-Bold' }}>{average}/20</Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+};
 
 function ProfilePage({ navigation }) {
   const { theme, setIsLoggedIn, setIsAutoTheme } = useGlobalAppContext();
   const { mainAccount } = useCurrentAccountContext();
   const insets = useSafeAreaInsets();
   const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
+
+  // Logic for display data
+  const safeGrade = mainAccount?.grade || mainAccount?.classe?.libelle || mainAccount?.profile?.classe?.libelle || null;
+  const safeSchool = mainAccount?.school || mainAccount?.nomEtablissement || mainAccount?.etablissement?.nom || mainAccount?.profile?.etablissement?.nom || "Non renseigné";
+  // Check strict "P" for Parent, otherwise assume Student/Personnel if data exists
+  const isParent = mainAccount?.accountType === "P" || mainAccount?.typeCompte === "P";
+  const statusLabel = isParent ? "Compte Parent" : (safeGrade || "Élève");
 
   // Logic
   const [canSwitchAccounts, setCanSwitchAccounts] = useState(false);
@@ -65,11 +108,19 @@ function ProfilePage({ navigation }) {
   }
 
   async function disconnect() {
+    console.log("[ProfilePage] Disconnecting...");
     setIsAutoTheme(true);
+
+    // Comprehensive storage wipe
     await AccountHandler.eraseData();
+    await StorageHandler.removeData("marks");
+    await StorageHandler.removeData("homework");
+    await StorageHandler.removeData("timetable");
+
     setIsDisconnecting(false);
     setIsLoggedIn(false);
     HapticsHandler.vibrate("light");
+    console.log("[ProfilePage] Disconnect sequence complete.");
   }
 
   return (
@@ -82,24 +133,41 @@ function ProfilePage({ navigation }) {
 
         <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
           {/* Cover Section */}
-          <View style={{ alignItems: 'center', paddingTop: 100, paddingBottom: 40 }}>
-            <View style={{ padding: 4, backgroundColor: theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)', borderRadius: 60 }}>
+          <View style={{ alignItems: 'center', paddingTop: 100, paddingBottom: 30 }}>
+            <View style={{
+              padding: 4,
+              backgroundColor: theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.8)',
+              borderRadius: 60,
+              shadowColor: theme.shadowColor, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 10
+            }}>
               <CustomProfilePhoto accountID={mainAccount.id} size={110} />
             </View>
-            <Text style={{ color: theme.dark ? '#FFF' : theme.colors.onBackground, fontSize: 24, fontFamily: 'Text-Bold', marginTop: 15 }}>
-              {mainAccount?.firstName} {mainAccount?.lastName}
-            </Text>
-            <Text style={{ color: '#A78BFA', fontSize: 16, fontFamily: 'Text-Medium' }}>
-              {mainAccount?.accountType == "E" ? mainAccount?.grade : "Compte Parent"}
+
+            <Text style={{ color: theme.dark ? '#FFF' : theme.colors.onBackground, fontSize: 26, fontFamily: 'Text-Bold', marginTop: 15, textAlign: 'center' }}>
+              {mainAccount?.firstName || mainAccount?.prenom} {mainAccount?.lastName || mainAccount?.nom}
             </Text>
 
-            <View style={{
-              marginTop: 10, backgroundColor: theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
-              paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10
-            }}>
-              <Text style={{ color: theme.dark ? '#94A3B8' : '#64748B', fontSize: 12 }}>ID: {mainAccount?.id}</Text>
+            {mainAccount?.email && (
+              <Text style={{ color: theme.dark ? '#94A3B8' : '#64748B', fontSize: 14, fontFamily: 'Text-Medium', marginTop: 2 }}>
+                {mainAccount.email}
+              </Text>
+            )}
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
+              <View style={{
+                backgroundColor: 'rgba(139, 92, 246, 0.15)',
+                paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12,
+                borderWidth: 1, borderColor: 'rgba(139, 92, 246, 0.3)'
+              }}>
+                <Text style={{ color: '#A78BFA', fontSize: 14, fontFamily: 'Text-Bold' }}>
+                  {statusLabel}
+                </Text>
+              </View>
             </View>
           </View>
+
+          {/* Highlights (Average) */}
+          <ProfileHighlights mainAccount={mainAccount} theme={theme} />
 
           {/* Info Cards */}
           <View style={{ paddingHorizontal: 20 }}>
@@ -110,14 +178,14 @@ function ProfilePage({ navigation }) {
               borderWidth: 1, borderColor: theme.dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', marginBottom: 20,
               shadowColor: "#000", shadowOpacity: theme.dark ? 0 : 0.05, shadowRadius: 10, elevation: 2
             }}>
-              {mainAccount?.accountType == "E" && (
+              {!isParent && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 15 }}>
                   <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(139,92,246,0.2)', alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
                     <GraduationCapIcon size={20} color="#8B5CF6" />
                   </View>
                   <View>
                     <Text style={{ color: theme.dark ? '#94A3B8' : '#64748B', fontSize: 12 }}>CLASSE</Text>
-                    <Text style={{ color: theme.dark ? '#FFF' : theme.colors.onBackground, fontSize: 16, fontWeight: '600' }}>{mainAccount?.grade}</Text>
+                    <Text style={{ color: theme.dark ? '#FFF' : theme.colors.onBackground, fontSize: 16, fontWeight: '600' }}>{safeGrade || "Non définie"}</Text>
                   </View>
                 </View>
               )}
@@ -125,10 +193,10 @@ function ProfilePage({ navigation }) {
                 <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(16,185,129,0.2)', alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
                   <SchoolIcon size={20} color="#10B981" />
                 </View>
-                <View>
+                <View style={{ flex: 1 }}>
                   <Text style={{ color: theme.dark ? '#94A3B8' : '#64748B', fontSize: 12 }}>ÉTABLISSEMENT</Text>
                   <Text style={{ color: theme.dark ? '#FFF' : theme.colors.onBackground, fontSize: 16, fontWeight: '600' }} numberOfLines={1}>
-                    {mainAccount?.school || "Non renseigné"}
+                    {safeSchool}
                   </Text>
                 </View>
               </View>

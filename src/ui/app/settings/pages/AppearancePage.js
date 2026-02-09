@@ -215,6 +215,8 @@ function AppearancePage({ navigation }) {
                         })}
                     </View>
 
+
+
                 </ScrollView>
             </LinearGradient>
         </View>

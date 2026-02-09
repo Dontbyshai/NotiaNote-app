@@ -25,6 +25,10 @@ class StorageHandler {
   static async saveData(fileName: string, data: {}) {
     await AsyncStorage.setItem(this.getPlatformKey(fileName), JSON.stringify(data));
   }
+  // Remove data
+  static async removeData(fileName: string) {
+    await AsyncStorage.removeItem(this.getPlatformKey(fileName));
+  }
   // Get JSON data from file
   static async getData(fileName: string): Promise<{} | null> {
     const platformKey = this.getPlatformKey(fileName);

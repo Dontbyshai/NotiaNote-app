@@ -56,43 +56,49 @@ function AboutPage({ navigation }) {
                             <Text style={{ fontSize: 40 }}>🪐</Text>
                         </View>
                         <Text style={{ color: theme.dark ? '#FFF' : theme.colors.onBackground, fontSize: 28, fontFamily: 'Text-Bold', fontWeight: 'bold' }}>NotiaNote</Text>
-                        <Text style={{ color: theme.colors.primaryLight, fontSize: 16, fontFamily: 'Text-Medium' }}>
-                            v2.1.0 Premium
+                        <Text style={{ color: theme.dark ? '#FFFFFF' : theme.colors.primaryLight, fontSize: 16, fontFamily: 'Text-Medium' }}>
+                            v2.1.2 Premium
                         </Text>
                     </View>
 
-                    {/* Catchphrase */}
-                    <Text style={{ color: theme.dark ? '#E2E8F0' : '#475569', fontSize: 16, textAlign: 'center', marginBottom: 30, lineHeight: 24, fontStyle: 'italic' }}>
-                        "L'alternative puissante, stable et sécurisée à EcoleDirecte."
-                    </Text>
+                    {/* Branding */}
+                    <TouchableOpacity onPress={() => handleLink("https://shaiscompany.com")} style={{ alignItems: 'center', marginBottom: 30 }}>
+                        <Text style={{ color: theme.dark ? '#FFFFFF' : '#1E293B', fontSize: 16, textAlign: 'center', lineHeight: 24, fontWeight: '600' }}>
+                            Propulsé par <Text style={{ color: theme.dark ? '#FFFFFF' : '#1E293B', textDecorationLine: 'underline' }}>Shai's Company</Text>
+                        </Text>
+                    </TouchableOpacity>
 
                     {/* Features Section */}
                     <View style={[styles.card, { backgroundColor: theme.dark ? 'rgba(15, 23, 42, 0.4)' : '#FFFFFF', borderColor: theme.dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', shadowColor: "#000", shadowOpacity: theme.dark ? 0 : 0.05, shadowRadius: 10, elevation: 2 }]}>
-                        <Text style={[styles.sectionTitle, { color: theme.dark ? '#FFF' : theme.colors.onBackground }]}>🚀 Nouveautés v2.1.0</Text>
+                        <Text style={[styles.sectionTitle, { color: theme.dark ? '#FFF' : theme.colors.onBackground }]}>🚀 Nouveautés v2.1.2</Text>
 
-                        <Text style={[styles.subTitle, { color: theme.dark ? '#FFF' : theme.colors.onBackground }]}>🌐 Écosystème Unifié</Text>
+                        <Text style={[styles.subTitle, { color: theme.dark ? '#FFF' : theme.colors.onBackground }]}>⌨️ Clavier Optimisé</Text>
                         <Text style={[styles.paragraph, { color: theme.dark ? '#CBD5E1' : '#475569' }]}>
-                            Une synchronisation parfaite entre l'application et le site web. Vos préférences et votre expérience Galaxy vous suivent partout.
+                            Le formulaire de connexion s'adapte intelligemment au clavier pour garder tous les champs visibles pendant la saisie.
                         </Text>
 
-                        <Text style={[styles.subTitle, { color: theme.dark ? '#FFF' : theme.colors.onBackground }]}>🔐 Protection Biométrique</Text>
+                        <Text style={[styles.subTitle, { color: theme.dark ? '#FFF' : theme.colors.onBackground }]}>🍽️ Protection Cantine</Text>
                         <Text style={[styles.paragraph, { color: theme.dark ? '#CBD5E1' : '#475569' }]}>
-                            Sécurisez l'accès à vos notes avec FaceID ou TouchID. Une couche de confidentialité supplémentaire gérée par votre appareil via l'enclave sécurisée.
+                            Confirmation avant de réinitialiser votre code personnalisé pour éviter les fausses manipulations.
                         </Text>
 
-                        <Text style={[styles.subTitle, { color: theme.dark ? '#FFF' : theme.colors.onBackground }]}>📬 Messagerie & Notifications</Text>
+                        <Text style={[styles.subTitle, { color: theme.dark ? '#FFF' : theme.colors.onBackground }]}>⚙️ Interface Épurée</Text>
                         <Text style={[styles.paragraph, { color: theme.dark ? '#CBD5E1' : '#475569' }]}>
-                            Notifications intelligentes avec décompte réel des messages non lus. Alertes immédiates pour les absences, retards et contrôles à venir.
+                            Nettoyage des paramètres avec suppression des outils de diagnostic et messages informatifs pour les fonctionnalités à venir.
                         </Text>
 
-                        <Text style={[styles.subTitle, { color: theme.dark ? '#FFF' : theme.colors.onBackground }]}>📝 Suivi de Progression</Text>
+                        <Text style={[styles.subTitle, { color: theme.dark ? '#FFF' : theme.colors.onBackground }]}>🔧 Stabilité Améliorée</Text>
                         <Text style={[styles.paragraph, { color: theme.dark ? '#CBD5E1' : '#475569' }]}>
-                            Visualisez instantanément votre évolution grâce aux flèches de tendance (↑/↓) sur vos moyennes générales et par matière.
+                            Rafraîchissement automatique de session et optimisation du système de notifications en arrière-plan.
                         </Text>
                     </View>
 
                     {/* Links */}
                     <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginVertical: 30 }}>
+                        <TouchableOpacity onPress={() => handleLink("https://notianote.fr")} style={styles.socialBtn}>
+                            <GlobeIcon color={theme.dark ? "#FFF" : theme.colors.onBackground} size={24} />
+                            <Text style={[styles.socialText, { color: theme.dark ? '#FFF' : theme.colors.onBackground }]}>Site Web</Text>
+                        </TouchableOpacity>
                         <TouchableOpacity onPress={() => handleLink("https://github.com/Dontbyshai/NotiaNote")} style={styles.socialBtn}>
                             <GithubIcon color={theme.dark ? "#FFF" : theme.colors.onBackground} size={24} />
                             <Text style={[styles.socialText, { color: theme.dark ? '#FFF' : theme.colors.onBackground }]}>GitHub</Text>
@@ -105,7 +111,8 @@ function AboutPage({ navigation }) {
 
                     {/* Credits */}
                     <Text style={{ color: '#64748B', textAlign: 'center', fontSize: 12 }}>
-                        Créé avec ❤️ par Dontbyshai.{'\n'}
+                        Créé par dontbyshai{'\n'}
+                        Propulsé par Shai's Company{'\n'}
                         Projet open-source non-affilié officiellement à Aplim.
                     </Text>
 

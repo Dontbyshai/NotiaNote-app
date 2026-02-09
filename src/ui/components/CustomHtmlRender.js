@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Image, useWindowDimensions } from 'react-native';
+import { View, Text, Image, useWindowDimensions, TouchableOpacity, Linking, Alert } from 'react-native';
 
 /**
  * Composant de rendu HTML "Maître-Nageur" (Custom/Lightweight)
@@ -84,9 +84,31 @@ const CustomHtmlRender = ({ html, baseStyle }) => {
         <View>
             {finalParts.map((part, index) => {
                 if (part.type === 'text') {
+                    // Detect URLs in plain text
+                    const urlRegex = /(https?:\/\/[^\s]+)/g;
+                    const textParts = part.content.split(urlRegex);
+
                     return (
                         <Text key={index} style={[baseStyle, { marginBottom: 8 }]}>
-                            {part.content}
+                            {textParts.map((textPart, i) => {
+                                if (textPart.match(urlRegex)) {
+                                    return (
+                                        <Text
+                                            key={i}
+                                            style={{ color: '#60A5FA', textDecorationLine: 'underline' }}
+                                            onPress={() => {
+                                                Linking.openURL(textPart).catch(err => {
+                                                    Alert.alert('Erreur', 'Impossible d\'ouvrir le lien');
+                                                    console.error('Failed to open URL:', err);
+                                                });
+                                            }}
+                                        >
+                                            {textPart}
+                                        </Text>
+                                    );
+                                }
+                                return <Text key={i}>{textPart}</Text>;
+                            })}
                         </Text>
                     );
                 } else if (part.type === 'img') {
@@ -132,11 +154,21 @@ const CustomHtmlRender = ({ html, baseStyle }) => {
                         );
                     }
 
-                    // Lien normal
+                    // Lien normal (externe)
                     return (
-                        <Text key={index} style={[baseStyle, { color: '#60A5FA', textDecorationLine: 'underline', marginBottom: 8 }]}>
-                            {part.text} (Lien externe)
-                        </Text>
+                        <TouchableOpacity
+                            key={index}
+                            onPress={() => {
+                                Linking.openURL(part.href).catch(err => {
+                                    Alert.alert('Erreur', 'Impossible d\'ouvrir le lien');
+                                    console.error('Failed to open URL:', err);
+                                });
+                            }}
+                        >
+                            <Text style={[baseStyle, { color: '#60A5FA', textDecorationLine: 'underline', marginBottom: 8 }]}>
+                                {part.text}
+                            </Text>
+                        </TouchableOpacity>
                     );
                 }
                 return null;

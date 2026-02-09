@@ -2,14 +2,15 @@ import { useEffect, useState } from "react";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text, View, ActivityIndicator, Platform, TouchableOpacity, ScrollView, Dimensions, StatusBar, StyleSheet } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { ChevronLeft, ShieldCheck, AlertCircle } from 'lucide-react-native';
 
 import AccountHandler from "../../core/AccountHandler";
 import HapticsHandler from "../../core/HapticsHandler";
 import StorageHandler from "../../core/StorageHandler";
-import APIEndpoints from "../../core/APIEndpoints";
 import { parseHtmlData } from "../../util/Utils";
-import { fetchED, useIOSFetch } from "../../util/functions";
 import { useGlobalAppContext } from "../../util/GlobalAppContext";
+
+const { width } = Dimensions.get('window');
 
 // Double auth popup
 function DoubleAuthPopup({ navigation }) {
@@ -20,13 +21,10 @@ function DoubleAuthPopup({ navigation }) {
   const [isLoading, setIsLoading] = useState(false);
   const [errorLoading, setErrorLoading] = useState(false);
 
-  // Whether the user chose the right answer
-  const [wrongChoice, setWrongChoice] = useState(false);
-  const [selectedAnswer, setSelectedAnswer] = useState(-1);
-
-  // Question content
-  const [question, setQuestion] = useState(null);
+  // Question and answers
+  const [question, setQuestion] = useState("");
   const [answers, setAnswers] = useState([]);
+  const [selectedAnswer, setSelectedAnswer] = useState(-1);
   const [rawAnswers, setRawAnswers] = useState([]);
 
   // Parse the question
@@ -35,56 +33,25 @@ function DoubleAuthPopup({ navigation }) {
     setErrorLoading(false);
 
     try {
-      var url = new URL(`${AccountHandler.USED_URL}${APIEndpoints.DOUBLE_AUTH}`);
-      url.searchParams.set("verbe", "get");
-      url.searchParams.set("v", "4.75.0");
+      console.log("[2FA-DEBUG] Fetching question via AccountHandler...");
 
-      // Request
-      const responseED = await fetchED(url.toString(), {
-        method: "POST",
-        body: 'data={}',
-        headers: {
-          "X-Token": AccountHandler.temporaryLoginToken,
-          "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
-          "2fa-Token": AccountHandler.temporary2FAToken,
-        }
-      });
+      const questionData = await AccountHandler.get2FAQuestion();
 
-      // fetchED normalization means data is in .data
-      var response = responseED ? {
-        status: 200,
-        data: responseED.data,
-        headers: responseED.headers,
-      } : { status: 500 };
+      if (questionData && questionData.question) {
+        console.log("[2FA-DEBUG] Got double auth content!");
 
-      if (response.status === 200) {
-        const code = response.data?.code || response.data?.status || 200;
-        if (code === 200) {
-          console.log("Got double auth content !");
-          const headers = response.headers || {};
-          // Update token if provided in headers
-          const new2FaToken = headers["2fa-token"] || headers["2FA-TOKEN"] || headers["x-2fa-token"];
-          if (new2FaToken) {
-            AccountHandler.temporary2FAToken = new2FaToken;
-          }
+        const questionText = parseHtmlData(questionData.question);
+        setQuestion(questionText);
 
-          setQuestion(parseHtmlData(response.data.data?.question ?? ""))
-          var tempAnswers = [];
-          response.data.data?.propositions?.forEach(answer => {
-            tempAnswers.push(parseHtmlData(answer));
-          });
-          setAnswers(tempAnswers);
-          setRawAnswers(response.data.data?.propositions ?? []);
-        } else {
-          console.warn(`API responded with unknown code ${code}`);
-          setErrorLoading(true);
-        }
+        const tempAnswers = (questionData.propositions || []).map(answer => parseHtmlData(answer));
+        setAnswers(tempAnswers);
+        setRawAnswers(questionData.propositions || []);
       } else {
-        console.warn("API request failed");
+        console.warn("[2FA-DEBUG] No question data returned from library");
         setErrorLoading(true);
       }
     } catch (e) {
-      console.warn("Error getting question:", e);
+      console.warn("[2FA-DEBUG] Error getting question:", e);
       setErrorLoading(true);
     } finally {
       setIsLoading(false);
@@ -98,6 +65,7 @@ function DoubleAuthPopup({ navigation }) {
   // Confirm choice
   const [isConfirmingChoice, setIsConfirmingChoice] = useState(false);
   const [errorConfirmingChoice, setErrorConfirmingChoice] = useState(false);
+  const [wrongChoice, setWrongChoice] = useState(false);
 
   async function confirmChoice() {
     if (selectedAnswer === -1) {
@@ -108,71 +76,36 @@ function DoubleAuthPopup({ navigation }) {
     HapticsHandler.vibrate("light");
     setIsConfirmingChoice(true);
     setErrorConfirmingChoice(false);
-
-    console.log("Confirming choice...");
+    setWrongChoice(false);
 
     try {
-      var url = new URL(`${AccountHandler.USED_URL}${APIEndpoints.DOUBLE_AUTH}`);
-      url.searchParams.set("verbe", "post");
-      url.searchParams.set("v", "4.75.0");
+      const selectedResponse = rawAnswers[selectedAnswer];
+      const result = await AccountHandler.send2FAResponse(selectedResponse);
 
-      // Request
-      const responseED = await fetchED(url.toString(), {
-        method: "POST",
-        body: `data=${JSON.stringify({
-          "choix": rawAnswers[selectedAnswer],
-        })}`,
-        headers: {
-          "X-Token": AccountHandler.temporaryLoginToken,
-          "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
-          "2fa-token": AccountHandler.temporary2FAToken,
-        }
-      });
+      if (result && result.cn && result.cv) {
+        const { cn, cv } = result;
+        await StorageHandler.saveData("double-auth-tokens", { cn, cv });
 
-      var response = responseED ? {
-        status: 200,
-        data: responseED.data,
-        headers: responseED.headers,
-      } : { status: 500 };
+        // Wait for storage consistency
+        await new Promise(r => setTimeout(r, 1500));
 
-      if (response.status === 200) {
-        const code = response.data?.code || response.data?.status || 200;
-        if (code === 200) {
-          console.log("Right answer, got login IDs !");
-          const { cn, cv } = response.data.data;
-          const headers = response.headers || {};
-          const new2FaToken = headers["2fa-token"] || headers["2FA-TOKEN"] || headers["x-2fa-token"];
-          if (new2FaToken) AccountHandler.temporary2FAToken = new2FaToken;
+        const reloginStatus = await AccountHandler.refreshLogin();
+        HapticsHandler.vibrate("light");
 
-          await StorageHandler.saveData("double-auth-tokens", { cn, cv });
-
-          // Small delay to ensure storage consistency and avoid race conditions
-          await new Promise(r => setTimeout(r, 500));
-
-          const reloginStatus = await AccountHandler.refreshLogin();
-          HapticsHandler.vibrate("light");
-
-          if (reloginStatus == 1) {
-            navigation.pop();
-            setIsLoggedIn(true);
-          } else if (reloginStatus == 2) {
-            navigation.navigate("ChooseAccountPage");
-          } else {
-            console.warn("Relogin failed...");
-            // If relogin fails (e.g. timeout), shows error but doesn't reset 'wrongChoice' 
-            // because the choice was technically correct (we got cn/cv).
-            setErrorConfirmingChoice("Login Failed");
-          }
+        if (reloginStatus == 1) {
+          navigation.pop();
+          setIsLoggedIn(true);
+        } else if (reloginStatus == 2) {
+          navigation.navigate("ChooseAccountPage");
         } else {
-          console.warn("Wrong answer, account suspended code:", code);
-          setWrongChoice(true);
+          setErrorConfirmingChoice("Login Failed");
         }
       } else {
-        console.warn("API request failed status:", response.status);
-        setErrorConfirmingChoice(true);
+        setWrongChoice(true);
+        HapticsHandler.vibrate("error");
       }
     } catch (e) {
-      console.warn("Error confirming choice:", e);
+      console.warn("[2FA-DEBUG] Error confirming choice:", e);
       setErrorConfirmingChoice(true);
     } finally {
       setIsConfirmingChoice(false);
@@ -185,301 +118,298 @@ function DoubleAuthPopup({ navigation }) {
 
       {/* Background Gradient */}
       <LinearGradient
-        colors={['#0F111E', '#1A1B2E', '#151725']}
+        colors={['#2E1065', '#0F172A']}
         style={styles.gradient}
       />
 
-      <View style={{ flex: 1, paddingTop: Math.max(insets.top - 15, 10) }}>
+      {/* Animated Accent Orb */}
+      <View style={styles.accentOrb} />
+
+      <View style={{ flex: 1, paddingTop: Math.max(insets.top, 10) }}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
-            style={styles.closeButton}
+            style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Text style={{ color: '#E5E7EB', fontSize: 24, fontWeight: '400' }}>✕</Text>
+            <ChevronLeft size={24} color="#FFF" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>VÉRIFICATION</Text>
-          <View style={{ width: 40 }} />
+          <View style={{ width: 44 }} />
         </View>
 
         {/* Content */}
-        <View style={styles.contentContainer}>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+          showsVerticalScrollIndicator={false}
+        >
           {isLoading ? (
-            <View style={styles.centerContainer}>
+            <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#A855F7" />
-              <Text style={styles.loadingText}>Chargement...</Text>
+              <Text style={styles.loadingText}>Vérification sécurisée...</Text>
             </View>
           ) : errorLoading ? (
-            <View style={styles.centerContainer}>
-              <Text style={styles.errorText}>Une erreur est survenue.</Text>
+            <View style={styles.errorContainer}>
+              <AlertCircle size={48} color="#EF4444" />
+              <Text style={styles.errorText}>Impossible de récupérer la question</Text>
               <TouchableOpacity style={styles.retryButton} onPress={getQuestion}>
-                <Text style={styles.retryText}>Réessayer</Text>
-              </TouchableOpacity>
-            </View>
-          ) : wrongChoice ? (
-            <View style={styles.centerContainer}>
-              <Text style={styles.errorText}>Mauvaise réponse.</Text>
-              <Text style={styles.subErrorText}>Votre compte a peut-être été suspendu.</Text>
-              <TouchableOpacity style={styles.retryButton} onPress={() => { setWrongChoice(false); getQuestion(); }}>
-                <Text style={styles.retryText}>Réessayer</Text>
+                <Text style={styles.retryButtonText}>Réessayer</Text>
               </TouchableOpacity>
             </View>
           ) : (
-            <>
-              <View style={styles.instructionContainer}>
-                <View style={styles.instructionBar} />
-                <Text style={styles.instructionText}>
-                  Sécurité renforcée : Veuillez répondre à la question secrète pour confirmer votre identité.
-                </Text>
+            <View style={styles.questionSection}>
+              {/* Security Icon Badge */}
+              <View style={styles.iconContainer}>
+                <LinearGradient
+                  colors={['#A855F7', '#3B82F6']}
+                  style={styles.iconGlow}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                />
+                <View style={styles.iconInner}>
+                  <ShieldCheck size={32} color="#FFF" />
+                </View>
               </View>
 
-              <Text style={styles.questionText}>
-                {question}
-              </Text>
+              <Text style={styles.questionSubtitle}>QUESTION DE SÉCURITÉ</Text>
+              <Text style={styles.questionTitle}>{question}</Text>
 
-              <ScrollView
-                style={styles.optionsList}
-                contentContainerStyle={{ paddingBottom: 100 }}
-                showsVerticalScrollIndicator={false}
-              >
-                {answers.map((answer, index) => {
-                  const isSelected = selectedAnswer === index;
-                  return (
-                    <TouchableOpacity
-                      key={index}
-                      activeOpacity={0.8}
-                      onPress={() => {
-                        setSelectedAnswer(index);
-                        HapticsHandler.vibrate("light");
-                      }}
-                      style={[
-                        styles.optionCard,
-                        isSelected && styles.optionCardSelected
-                      ]}
-                    >
-                      <View style={styles.radioWrapper}>
-                        <View style={[
-                          styles.radioOuter,
-                          isSelected && styles.radioOuterSelected
-                        ]}>
-                          {isSelected && <View style={styles.radioInner} />}
-                        </View>
-                      </View>
-                      <Text style={[
-                        styles.optionText,
-                        isSelected && styles.optionTextSelected
-                      ]}>
-                        {answer}
-                      </Text>
-                      {isSelected && <Text style={{ color: '#22D3EE', fontSize: 18 }}>✓</Text>}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </>
+              <View style={styles.divider} />
+
+              <View style={styles.answersList}>
+                {answers.map((answer, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setSelectedAnswer(index);
+                      setWrongChoice(false);
+                      HapticsHandler.vibrate("selection");
+                    }}
+                    style={[
+                      styles.answerItem,
+                      selectedAnswer === index && styles.answerItemSelected,
+                      wrongChoice && selectedAnswer === index && styles.answerItemWrong
+                    ]}
+                  >
+                    <View style={[
+                      styles.radio,
+                      selectedAnswer === index && styles.radioSelected
+                    ]}>
+                      {selectedAnswer === index && <View style={styles.radioInner} />}
+                    </View>
+                    <Text style={[
+                      styles.answerText,
+                      selectedAnswer === index && styles.answerTextSelected
+                    ]}>{answer}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {wrongChoice && (
+                <View style={styles.errorLabelContainer}>
+                  <AlertCircle size={16} color="#EF4444" style={{ marginRight: 8 }} />
+                  <Text style={styles.wrongLabel}>Mauvaise réponse, réessayez.</Text>
+                </View>
+              )}
+
+              {errorConfirmingChoice && (
+                <Text style={styles.errorLabel}>
+                  {typeof errorConfirmingChoice === 'string' ? errorConfirmingChoice : "Une erreur est survenue lors de la validation."}
+                </Text>
+              )}
+            </View>
           )}
-        </View>
+        </ScrollView>
 
-        {/* Footer Button */}
-        {!isLoading && !errorLoading && !wrongChoice && (
-          <View style={styles.footerContainer}>
-            <TouchableOpacity
-              style={styles.validateButton}
-              activeOpacity={0.8}
-              onPress={confirmChoice}
-              disabled={isConfirmingChoice}
-            >
-              <LinearGradient
-                colors={errorConfirmingChoice ? ['#EF4444', '#DC2626'] : ['#8B5CF6', '#3B82F6']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.gradientButton}
-              >
-                {isConfirmingChoice ? (
-                  <ActivityIndicator color="#FFF" />
-                ) : errorConfirmingChoice !== null && errorConfirmingChoice !== false ? (
-                  <Text style={styles.validateButtonText}>Erreur ({errorConfirmingChoice})</Text>
-                ) : (
-                  <Text style={styles.validateButtonText}>Valider</Text>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        )}
+        {/* Floating Action Button */}
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+          <TouchableOpacity
+            onPress={confirmChoice}
+            disabled={selectedAnswer === -1 || isLoading || isConfirmingChoice}
+            activeOpacity={0.8}
+            style={[
+              styles.confirmButton,
+              (selectedAnswer === -1 || isLoading || isConfirmingChoice) && styles.confirmButtonDisabled
+            ]}
+          >
+            <LinearGradient
+              colors={['#A855F7', '#3B82F6']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={StyleSheet.absoluteFill}
+              borderRadius={20}
+              opacity={selectedAnswer === -1 ? 0.4 : 1}
+            />
+            {isConfirmingChoice ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.confirmButtonText}>CONTINUER</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
-    </View >
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0F111E',
-  },
-  gradient: {
+  container: { flex: 1, backgroundColor: '#0F172A' },
+  gradient: { ...StyleSheet.absoluteFillObject },
+  accentOrb: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
+    top: -100,
+    right: -100,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: '#A855F7',
+    opacity: 0.1,
   },
+  scrollContent: { paddingHorizontal: 24, paddingTop: 20 },
   header: {
+    height: 60,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'android' ? 40 : 10,
-    paddingBottom: 20,
+    paddingHorizontal: 12,
   },
-  closeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  backButton: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 12,
   },
   headerTitle: {
-    color: '#E5E7EB',
-    fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: 2,
+    color: '#94A3B8',
+    fontSize: 11,
+    fontFamily: 'Text-Bold',
+    letterSpacing: 3
   },
-  contentContainer: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  centerContainer: {
-    flex: 1,
+  loadingContainer: { height: 400, alignItems: 'center', justifyContent: 'center' },
+  loadingText: { color: '#94A3B8', marginTop: 20, fontSize: 15, fontFamily: 'Text-Medium' },
+  errorContainer: { height: 400, alignItems: 'center', justifyContent: 'center' },
+  errorText: { color: '#EF4444', fontSize: 16, fontFamily: 'Text-Bold', marginTop: 20, marginBottom: 30, textAlign: 'center' },
+  retryButton: { paddingHorizontal: 30, paddingVertical: 14, backgroundColor: 'rgba(239, 68, 68, 0.1)', borderRadius: 12, borderWidth: 1, borderColor: '#EF4444' },
+  retryButtonText: { color: '#EF4444', fontSize: 14, fontFamily: 'Text-Bold' },
+
+  questionSection: { alignItems: 'center', marginTop: 10 },
+  iconContainer: {
+    width: 80,
+    height: 80,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 25,
   },
-  loadingText: {
-    color: '#9CA3AF',
-    marginTop: 10,
-    fontSize: 16,
+  iconGlow: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 24,
+    opacity: 0.2,
+    transform: [{ rotate: '45deg' }],
   },
-  errorText: {
-    color: '#EF4444',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 5,
-  },
-  subErrorText: {
-    color: '#9CA3AF',
-    fontSize: 14,
-    marginBottom: 20,
-  },
-  retryButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 8,
-    marginTop: 10,
-  },
-  retryText: {
-    color: '#FFF',
-  },
-  instructionContainer: {
-    flexDirection: 'row',
-    marginBottom: 30,
-    marginTop: 10,
-  },
-  instructionBar: {
-    width: 4,
-    backgroundColor: '#8B5CF6', // Purple Accent with Glow potential
-    borderRadius: 2,
-    marginRight: 15,
-    height: '100%',
-  },
-  instructionText: {
-    color: '#E5E7EB',
-    fontSize: 14,
-    lineHeight: 20,
-    flex: 1,
-  },
-  questionText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: 30,
-  },
-  optionsList: {
-    flex: 1,
-  },
-  optionCard: {
-    flexDirection: 'row',
+  iconInner: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(30, 32, 50, 0.6)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
-    padding: 16,
+  },
+  questionSubtitle: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontFamily: 'Text-Bold',
+    letterSpacing: 2,
     marginBottom: 12,
   },
-  optionCardSelected: {
-    borderColor: '#8B5CF6',
-    backgroundColor: 'rgba(139, 92, 246, 0.1)', // Light purple tint
+  questionTitle: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontFamily: 'Text-Bold',
+    lineHeight: 30,
+    textAlign: 'center',
+    marginBottom: 25,
   },
-  radioWrapper: {
+  divider: {
+    width: 40,
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 2,
+    marginBottom: 35,
+  },
+  answersList: { width: '100%', gap: 14 },
+  answerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    padding: 20,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  answerItemSelected: {
+    borderColor: 'rgba(168, 85, 247, 0.4)',
+    backgroundColor: 'rgba(168, 85, 247, 0.05)'
+  },
+  answerItemWrong: { borderColor: '#EF4444', backgroundColor: 'rgba(239, 68, 68, 0.05)' },
+  radio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#475569',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 16,
   },
-  radioOuter: {
-    width: 24,
-    height: 24,
+  radioSelected: { borderColor: '#A855F7' },
+  radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#A855F7' },
+  answerText: { flex: 1, color: '#94A3B8', fontSize: 16, fontFamily: 'Text-Medium' },
+  answerTextSelected: { color: '#FFFFFF', fontFamily: 'Text-Bold' },
+
+  errorLabelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 24,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#6B7280',
+  },
+  wrongLabel: { color: '#EF4444', fontSize: 13, fontFamily: 'Text-Medium' },
+  errorLabel: { color: '#EF4444', marginTop: 15, textAlign: 'center', fontSize: 13, fontFamily: 'Text-Medium' },
+
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    backgroundColor: 'transparent'
+  },
+  confirmButton: {
+    height: 60,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  radioOuterSelected: {
-    borderColor: '#22D3EE', // Cyan/Blue
-  },
-  radioInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#22D3EE',
-  },
-  optionText: {
-    color: '#9CA3AF',
-    fontSize: 16,
-  },
-  optionTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  footerContainer: {
-    padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 30,
-  },
-  validateButton: {
-    width: '100%',
-    height: 56,
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginTop: 10,
-    shadowColor: "#8B5CF6",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
+    shadowColor: "#A855F7",
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
-    shadowRadius: 4.65,
-    elevation: 8,
+    shadowRadius: 15,
+    elevation: 10,
+    overflow: 'hidden',
   },
-  gradientButton: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  confirmButtonDisabled: {
+    shadowOpacity: 0,
+    elevation: 0,
   },
-  validateButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+  confirmButtonText: { color: '#FFFFFF', fontSize: 15, fontFamily: 'Text-Bold', letterSpacing: 1.5 },
 });
 
 export default DoubleAuthPopup;

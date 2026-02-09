@@ -50,3 +50,22 @@ node_modules_OLD/
 
 # Secrets
 src/config/secrets.js
+
+# Backups
+ios_backup_duplicates/
+*_backup/
+*.bak
+
+# Build Artifacts
+*.ipa
+*.apk
+*.dSYM
+*.mobileprovision
+
+# Papillon / Sensitive
+*papillon*
+
+# Explicit IPAs
+ios/NotiaNote.ipa
+*.ipa
+

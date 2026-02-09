@@ -13,17 +13,21 @@ import EcoleDirecteApi from "../services/EcoleDirecteApi";
 class HomeworkHandler {
   // Homework functions //
   static async getAllHomework(accountID) {
+    console.log(`[HomeworkHandler] getAllHomework for ${accountID}`);
+    const payload = `data=${JSON.stringify({})}`;
     return AccountHandler.parseEcoleDirecte(
       "homework",
       accountID,
       `${AccountHandler.USED_URL}${APIEndpoints.ALL_HOMEWORK(accountID)}`,
-      'data={}',
+      payload,
       async (data) => {
+        console.log(`[HomeworkHandler] Params: ${JSON.stringify(data)}`); // Log raw response keys
         return await this.saveHomework(accountID, data);
       }
     );
   }
   static async saveHomework(accountID, homeworks) {
+    console.log(`[HomeworkHandler] saveHomework keys: ${Object.keys(homeworks)}`);
     var abstractHomework = {
       homeworks: {},
       days: {},
@@ -33,6 +37,7 @@ class HomeworkHandler {
 
     Object.keys(homeworks).forEach(day => {
       let diff = dayjs(day, "YYYY-MM-DD").diff(dayjs().startOf('day'));
+      console.log(`[HomeworkHandler] Processing day: ${day}, diff: ${diff}`);
       if (diff < 0) { return; }
 
       homeworks[day].forEach(homework => {
@@ -44,8 +49,10 @@ class HomeworkHandler {
           dateFor: day,
           dateGiven: new Date(homework.donneLe),
           isExam: homework.interrogation,
-          content: parseHtmlData(homework.contenu), // Add content for keyword scanning
+          isExam: homework.interrogation,
+          content: parseHtmlData(homework.contenu || homework.aFaire), // Try both keys
           prof: homework.nomProf, // Add prof for matching (crucial for DS detection)
+          files: homework.documents || [],
         };
 
         if (finalHomework.isExam) { // Check if exam is in less than 3 weeks
@@ -84,10 +91,12 @@ class HomeworkHandler {
 
     // Save data
     var cacheData = (await StorageHandler.getData("homework")) ?? {};
-    cacheData[accountID] = {
+    const accID = `${accountID}`;
+    cacheData[accID] = {
       data: abstractHomework,
       date: new Date(),
     };
+    console.log(`[HomeworkHandler] Saving homework to storage for ${accID}`);
     await StorageHandler.saveData("homework", cacheData);
 
     return 1;
@@ -95,11 +104,12 @@ class HomeworkHandler {
 
   // Day-specific functions
   static async getSpecificHomeworkForDay(accountID, day) {
+    const payload = `data=${JSON.stringify({})}`;
     return AccountHandler.parseEcoleDirecte(
       "specific-homework",
       accountID,
       `${AccountHandler.USED_URL}${APIEndpoints.SPECIFIC_HOMEWORK(accountID, day)}`,
-      'data={}',
+      payload,
       async (data) => {
         return await this.saveSpecificHomeworkForDay(accountID, data);
       }
@@ -200,12 +210,12 @@ class HomeworkHandler {
         effectiveFileType = "FICHIER_CDT";
       }
 
-      console.log(`[HomeworkHandler] Downloading fileID: ${file.id}, fileType: ${file.fileType} -> using: ${effectiveFileType}`);
+      console.log(`[HomeworkHandler] Downloading fileID: ${file.id}, fileType: ${file.fileType} -> using: ${effectiveFileType} `);
 
       const base64Data = await EcoleDirecteApi.downloadAttachment(file.id, effectiveFileType);
 
       const path = await StorageHandler.saveBase64Document(base64Data, file.title);
-      console.log(`[HomeworkHandler] Saved to ${path}`);
+      console.log(`[HomeworkHandler] Saved to ${path} `);
 
       return {
         promise: Promise.resolve(),

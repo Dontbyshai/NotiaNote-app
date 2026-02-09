@@ -33,7 +33,10 @@ export function CurrentAccountContextProvider({
 }) {
   // Which account is displayed
   const [accountID, setAccountID] = useState(_accountID);
-  useEffect(() => { setAccountID(_accountID); }, [_accountID]);
+  useEffect(() => {
+    console.log(`[CurrentAccountContext] Updating accountID to: ${_accountID}`);
+    setAccountID(_accountID);
+  }, [_accountID]);
 
   // Marks status
   const [gotMarks, _setGotMarks] = useState(_gotMarks);
@@ -53,7 +56,7 @@ export function CurrentAccountContextProvider({
 
   return (
     <CurrentAccountContext.Provider value={{
-      accountID, setShowMarksAccount, 
+      accountID, setShowMarksAccount,
       mainAccount, updateMainAccount,
       gotMarks, isGettingMarks, errorGettingMarks,
       gotHomework, isGettingHomework, errorGettingHomework, getHomework,

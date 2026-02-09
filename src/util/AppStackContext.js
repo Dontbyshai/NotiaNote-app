@@ -8,7 +8,7 @@ export const AppStackContext = createContext({
   isConnected: Boolean,
   isConnecting: Boolean,
   refreshLogin: Function,
-  
+
   globalDisplayUpdater: Number,
   updateGlobalDisplay: Function
 });
@@ -21,7 +21,7 @@ export function AppStackContextProvider({ children, needToRefresh, cameFromAuthS
   useEffect(() => { if (!isConnected || needToRefresh) { refreshLogin(); } }, [needToRefresh]);
   async function refreshLogin() {
     console.log("Refreshing login...");
-    
+
     setIsConnecting(true);
     setIsConnected(false);
     const reloginStatus = await AccountHandler.refreshLogin();
@@ -33,7 +33,7 @@ export function AppStackContextProvider({ children, needToRefresh, cameFromAuthS
     setIsConnecting(false);
     return reloginStatus;
   }
-  
+
   // To update the whole app when needed
   const [globalDisplayUpdater, _setGlobalDisplayUpdater] = useState(0);
   function updateGlobalDisplay() { _setGlobalDisplayUpdater(globalDisplayUpdater + 1); }

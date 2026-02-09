@@ -50,12 +50,15 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
     let hasNewData = false;
 
     try {
-        // 1. LOGIN SILENCIEUX
+        // 1. LOGIN SILENCIEUX (Supporte la 2FA via les jetons CN/CV)
         const credentials = await StorageHandler.getData("credentials");
         if (!credentials) return BackgroundFetch.BackgroundFetchResult.NoData;
 
-        const loginStatus = await AccountHandler.login(credentials.username, credentials.password);
-        if (loginStatus !== 1) return BackgroundFetch.BackgroundFetchResult.Failed;
+        const loginStatus = await AccountHandler.refreshLogin();
+        if (loginStatus !== 1) {
+            console.log("[Background] Silent login failed (2FA issues or bad credentials).");
+            return BackgroundFetch.BackgroundFetchResult.Failed;
+        }
 
         const mainAccount = await AccountHandler.getMainAccount();
         if (!mainAccount) return BackgroundFetch.BackgroundFetchResult.Failed;

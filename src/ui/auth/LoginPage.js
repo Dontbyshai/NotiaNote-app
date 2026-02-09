@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { View, Text, ActivityIndicator, Dimensions, Platform } from "react-native";
+import { View, Text, ActivityIndicator, Dimensions, Platform, KeyboardAvoidingView, Alert } from "react-native";
 import { AlertTriangleIcon, CircleUserRoundIcon, HelpCircleIcon, KeySquareIcon } from "lucide-react-native";
 
 import CustomModal from "../components/CustomModal";
@@ -29,6 +29,7 @@ function LoginPage({ navigation }) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [wrongPassword, setWrongPassword] = useState(false);
   const [errorConnecting, setErrorConnecting] = useState(false);
+  const [debugLog, setDebugLog] = useState("");
 
   // Login function
   async function login() {
@@ -36,9 +37,11 @@ function LoginPage({ navigation }) {
     setIsConnecting(true);
     setWrongPassword(false);
     setErrorConnecting(false);
+    setDebugLog("");
 
     // Call login function
     const status = await AccountHandler.login(username, password);
+    setDebugLog(`Status Code: ${status}`);
 
     setIsConnecting(false);
     if (status == 1) { // Successful
@@ -65,72 +68,79 @@ function LoginPage({ navigation }) {
       onlyShowBackButtonOnAndroid
       setWidth={setWindowWidth}
       children={(
-        <View>
-          <Text style={[theme.fonts.labelMedium, { marginBottom: 30 }]}>Vous pouvez vous connecter en tant qu'élève ou en tant que parent.</Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 0}
+          style={{ flex: 1 }}
+        >
+          <View>
+            <Text style={[theme.fonts.labelMedium, { marginBottom: 30 }]}>Vous pouvez vous connecter en tant qu'élève ou en tant que parent.</Text>
 
-          {/* Inputs */}
-          <CustomTextInput
-            label='Identifiant'
-            initialValue={username}
-            onChangeText={setUsername}
-            icon={<CircleUserRoundIcon size={25} color={theme.colors.onSurfaceDisabled} />}
-            style={{ marginBottom: 10 }}
-            windowWidth={windowWidth}
+            {/* Inputs */}
+            <CustomTextInput
+              label='Identifiant'
+              initialValue={username}
+              onChangeText={setUsername}
+              icon={<CircleUserRoundIcon size={25} color={theme.colors.onSurfaceDisabled} />}
+              style={{ marginBottom: 10 }}
+              windowWidth={windowWidth}
+              controller={usernameTextController}
+            />
+            <CustomTextInput
+              label={wrongPassword ? "Mot de passe incorrect" : "Mot de passe"}
+              labelColor={wrongPassword ? theme.colors.error : null}
+              onChangeText={setPassword}
+              secureTextEntry={true}
+              icon={<KeySquareIcon size={25} color={theme.colors.onSurfaceDisabled} />}
+              style={{ marginBottom: 10 }}
+              windowWidth={windowWidth}
+              controller={passwordTextController}
+            />
 
-            // Only for dev
-            controller={usernameTextController}
-            customRightIcon={__DEV__ && (
-              <View style={{ position: 'absolute', right: 15 }}>
-                <CustomDynamicLoginChooser setSelected={(value) => {
-                  setUsername(`demoaccount-${value}`);
-                }} />
-              </View>
+            {/* Account Recovery */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 30 }}>
+              <HelpCircleIcon size={20} color={theme.colors.onSurfaceVariant} style={{ marginRight: 10 }} />
+              <Text style={[theme.fonts.bodySmall, { color: theme.colors.onSurfaceVariant }]}>Compte ou mot de passe perdu ? </Text>
+              <Text
+                style={[theme.fonts.bodySmall, { color: theme.colors.primary, textDecorationLine: 'underline' }]}
+                onPress={() => openLink("https://www.ecoledirecte.com/MotDePassePerdu?provenance=Mobile")}
+              >Cliquez-ici</Text>
+            </View>
+
+            {/* Error Message */}
+            {errorConnecting && (
+              <CustomInformationCard
+                title="Erreur de connexion"
+                description="Nous n'avons pas pu vous connecter. Vérifiez votre connexion internet."
+                icon={<AlertTriangleIcon size={25} color={theme.colors.error} />}
+                type="error"
+                style={{ marginBottom: 30 }}
+              />
             )}
-          />
-          <CustomTextInput
-            label={wrongPassword ? "Mot de passe incorrect" : "Mot de passe"}
-            labelColor={wrongPassword ? theme.colors.error : null}
-            onChangeText={setPassword}
-            secureTextEntry={true}
-            icon={<KeySquareIcon size={25} color={theme.colors.onSurfaceDisabled} />}
-            controller={passwordTextController}
-            style={{ marginBottom: 20 }}
-            windowWidth={windowWidth}
-          />
 
-          {/* Login button */}
-          <CustomButton
-            title={isConnecting ? (
-              <ActivityIndicator size={25} color={theme.colors.onPrimary} />
+            {/* Login Button */}
+            {isConnecting ? (
+              <ActivityIndicator size="large" color={theme.colors.primary} />
             ) : (
-              <Text style={[theme.fonts.bodyLarge, { height: 25, color: theme.colors.onPrimary }]}>Se connecter</Text>
+              <CustomButton
+                text="Connexion"
+                onPress={login}
+                type="primary"
+                disabled={username.length < 3 || password.length < 3}
+              />
             )}
-            onPress={login}
-          />
 
-          {/* Connection failed */}
-          {errorConnecting && <CustomInformationCard
-            title='Une erreur est survenue'
-            icon={<AlertTriangleIcon size={20} color={theme.colors.error} />}
-            description='La connexion aux serveurs a échoué, vérifiez votre connexion internet.'
-            error={true}
-            style={{ marginTop: 30 }}
-          />}
-
-          {/* Reset password */}
-          <CustomInformationCard
-            title='Mot de passe oublié ?'
-            icon={<HelpCircleIcon size={20} color={theme.colors.onSurfaceDisabled} />}
-            description='Pas de panique, cliquez ici pour réinitialiser votre mot de passe.'
-            onPress={() => openLink('https://api.ecoledirecte.com/mot-de-passe-oublie.awp')}
-            style={{ marginTop: 30 }}
-          />
-
-          {/* Information */}
-          <Text style={[theme.fonts.labelMedium, { marginTop: 30, width: '80%', textAlign: 'center', alignSelf: 'center' }]}>
-            Aucune information n'est enregistrée, vos identifiants restent entre vous et ÉcoleDirecte.
-          </Text>
-        </View>
+            {/* Hidden Debug Overlay */}
+            {(debugLog !== "") && (
+              <Text
+                onPress={() => Alert.alert("Détails Techniques", `Code de retour: ${debugLog}\nSi 0: Mot de passe incorrect.\nSi -1: Erreur réseau.`)}
+                style={[theme.fonts.bodySmall, { color: theme.colors.onSurfaceDisabled, textAlign: 'center', marginTop: 30, opacity: 0.5 }]}
+              >
+                Infos de Debugging
+              </Text>
+            )}
+          </View>
+        </KeyboardAvoidingView>
       )}
     />
   );

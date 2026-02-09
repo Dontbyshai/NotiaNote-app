@@ -7,10 +7,15 @@ class APIEndpoints {
   static RENEW_TOKEN = "/v3/renewtoken.awp";
   static DOUBLE_AUTH = "/v3/connexion/doubleauth.awp";
 
-  static MARKS(accountID: string) { return `/v3/eleves/${accountID}/notes.awp`; };
+  // Using 'Eleves' (Capital E) as baseline for student endpoints 
+  static MARKS(accountID: string) { return `/v3/Eleves/${accountID}/notes.awp`; }
   static ALL_HOMEWORK(accountID: string) { return `/v3/Eleves/${accountID}/cahierdetexte.awp`; }
   static SPECIFIC_HOMEWORK(accountID: string, day: string) { return `/v3/Eleves/${accountID}/cahierdetexte/${day}.awp`; }
   static DOWNLOAD_HOMEWORK_ATTACHEMENT(fileID: string, fileType: string) { return `/v3/telechargement.awp?verbe=get&fichierId=${fileID}&leTypeDeFichier=${fileType}`; }
+
+  static MESSAGES(accountID: string) { return `/v3/Eleves/${accountID}/messages.awp`; }
+  static SCHOOL_LIFE(accountID: string) { return `/v3/Eleves/${accountID}/viescolaire.awp`; }
+  static TIMETABLE(accountID: string) { return `/v3/E/${accountID}/emploidutemps.awp`; }
 }
 
 export default APIEndpoints;

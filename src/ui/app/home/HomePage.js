@@ -7,6 +7,7 @@ import { useState, useEffect, useRef } from 'react';
 
 import CustomProfilePhoto from '../../components/CustomProfilePhoto';
 import { useGlobalAppContext } from '../../../util/GlobalAppContext';
+import { useAppStackContext } from '../../../util/AppStackContext';
 import { registerForPushNotificationsAsync } from "../../../core/NotificationHandler";
 import { useCurrentAccountContext } from '../../../util/CurrentAccountContext';
 import MarksHandler from '../../../core/MarksHandler';
@@ -104,14 +105,17 @@ export default function HomePage({ navigation }) {
 
     const scrollViewRef = useRef(null);
 
-    useEffect(() => {
-        console.log('[HomePage] useEffect triggered');
-        console.log('[HomePage] mainAccount:', mainAccount);
-        console.log('[HomePage] mainAccount?.id:', mainAccount?.id);
+    const { isConnected } = useAppStackContext();
+    const effectiveAccountID = (accountID && accountID !== "undefined") ? accountID : ((mainAccount?.id && mainAccount.id !== "undefined") ? mainAccount.id : null);
 
-        if (accountID) {
-            console.log('[HomePage] Loading data for account:', accountID);
-            loadAllData();
+    useEffect(() => {
+        console.log('[HomePage] useEffect triggered | isConnected:', isConnected);
+        console.log('[HomePage] ID Diagnostic: accountID=', accountID, 'mainAccount.id=', mainAccount?.id, 'effective=', effectiveAccountID);
+
+        // Check if we have mainAccount (which should have ID)
+        if (isConnected && mainAccount && mainAccount.id) {
+            console.log('[HomePage] Connection established and ID found. Loading data...');
+            loadAllData(mainAccount.id);
 
             // Init notifications (permissions only)
             registerForPushNotificationsAsync();
@@ -122,12 +126,11 @@ export default function HomePage({ navigation }) {
                 setShowEvolutionArrows(showArrows);
             };
             loadPrefs();
-
         } else {
-            console.log('[HomePage] No accountID yet, waiting...');
+            console.log('[HomePage] Waiting for connection or account info...');
             setRefreshing(false);
         }
-    }, [accountID]);
+    }, [mainAccount, isConnected]);
 
     // Helper to resolve color by checking both Code and Name (and their uppercase variants)
     // Helper to resolve color
@@ -204,14 +207,16 @@ export default function HomePage({ navigation }) {
         return () => clearInterval(interval);
     }, [todayLessons]);
 
-    async function loadAllData() {
-        if (!accountID) {
-            console.log('[HomePage] No accountID, skipping data load');
+    async function loadAllData(explicitID = null) {
+        const targetID = explicitID || effectiveAccountID;
+
+        if (!targetID) {
+            console.log('[HomePage] No targetID, skipping data load');
             setRefreshing(false);
             return;
         }
 
-        console.log('[HomePage] Loading all data for account:', accountID);
+        console.log('[HomePage] Loading all data for account:', targetID);
         setRefreshing(true);
 
         try {
@@ -222,10 +227,10 @@ export default function HomePage({ navigation }) {
 
         // Load all data in parallel
         await Promise.all([
-            loadMarks(),
-            loadTimetable(),
-            loadMessages(),
-            loadHomework()
+            loadMarks(targetID),
+            loadTimetable(targetID),
+            loadMessages(targetID),
+            loadHomework(targetID)
         ]);
 
         // Update widgets
@@ -235,16 +240,16 @@ export default function HomePage({ navigation }) {
         console.log('[HomePage] Data loading complete');
     }
 
-    async function loadMarks() {
-        if (!accountID) return;
+    async function loadMarks(targetID) {
+        if (!targetID) return;
 
         try {
             console.log('[HomePage] Loading marks...');
-            await MarksHandler.getMarks(accountID);
-            const averages = await MarksHandler.getAverages(accountID);
+            await MarksHandler.getMarks(targetID);
+            const averages = await MarksHandler.getAverages(targetID);
             console.log('[HomePage] Averages:', averages);
 
-            if (averages?.general) {
+            if (averages && (averages.general !== undefined && averages.general !== null)) {
                 const avg = parseFloat(averages.general).toFixed(2);
                 const label = averages.periodName ? `MOYENNE ${averages.periodName.toUpperCase()}` : 'MOYENNE GÉNÉRALE';
                 console.log('[HomePage] Setting average to:', avg);
@@ -266,8 +271,8 @@ export default function HomePage({ navigation }) {
         }
     }
 
-    async function loadTimetable() {
-        if (!accountID) return;
+    async function loadTimetable(targetID) {
+        if (!targetID) return;
 
         try {
             console.log('[HomePage] Loading timetable...');
@@ -300,7 +305,7 @@ export default function HomePage({ navigation }) {
             const endStr = TimetableHandler.formatDate(endOfNextWeek);
 
             console.log(`[HomePage] Fetching timetable from ${startStr} to ${endStr}`);
-            let allLessons = await TimetableHandler.getTimetable(accountID, startStr, endStr);
+            let allLessons = await TimetableHandler.getTimetable(targetID, startStr, endStr);
             allLessons = allLessons || [];
 
             // Targeted Filtering
@@ -340,12 +345,12 @@ export default function HomePage({ navigation }) {
         }
     }
 
-    async function loadMessages() {
-        if (!accountID) return;
+    async function loadMessages(targetID) {
+        if (!targetID) return;
 
         try {
             console.log('[HomePage] Loading messages...');
-            const response = await EcoleDirecteApi.getMessages(accountID, 'received', 0);
+            const response = await EcoleDirecteApi.getMessages(targetID, 'received', 0);
             console.log('[HomePage] Messages response status:', response?.status);
 
             if (response.status === 200 && response.data?.data) {
@@ -365,17 +370,17 @@ export default function HomePage({ navigation }) {
         }
     }
 
-    async function loadHomework() {
-        if (!accountID) return;
+    async function loadHomework(targetID) {
+        if (!targetID) return;
 
         try {
             console.log('[HomePage] Loading homework...');
-            await HomeworkHandler.getAllHomework(accountID);
+            await HomeworkHandler.getAllHomework(targetID);
             const hwCache = await StorageHandler.getData("homework");
-            console.log('[HomePage] HW Cache exists:', !!hwCache?.[accountID]);
+            console.log('[HomePage] HW Cache exists:', !!hwCache?.[targetID]);
 
-            if (hwCache?.[accountID]?.data) {
-                const { days, homeworks } = hwCache[accountID].data;
+            if (hwCache?.[targetID]?.data) {
+                const { days, homeworks } = hwCache[targetID].data;
                 let allUpcoming = [];
                 const now = new Date();
                 now.setHours(0, 0, 0, 0);
@@ -486,15 +491,15 @@ export default function HomePage({ navigation }) {
                         progressViewOffset={insets.top + 20}
                     />
                 }
-                contentInset={{ top: insets.top - 30 }}
-                contentOffset={{ x: 0, y: -(insets.top - 30) }}
+                contentInset={{ top: insets.top }}
+                contentOffset={{ x: 0, y: -insets.top }}
                 contentContainerStyle={{ paddingBottom: 120 }}
             >
                 {/* Hero Header */}
-                <View style={{ paddingTop: 55, paddingHorizontal: 20, marginBottom: 35 }}>
+                <View style={{ paddingTop: 20, paddingHorizontal: 20, marginBottom: 35 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 25 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <CustomProfilePhoto size={52} accountID={accountID} onPress={() => navigation.navigate("SettingsStack")} />
+                            <CustomProfilePhoto size={52} accountID={effectiveAccountID} onPress={() => navigation.navigate("SettingsStack")} />
                             <View style={{ marginLeft: 16 }}>
                                 <Text style={{ color: '#9ca3af', fontSize: 13, marginBottom: 2 }}>Bienvenue 👋</Text>
                                 <Text style={{ color: theme.colors.onBackground, fontSize: 22, fontWeight: '800', letterSpacing: 0.5 }}>
@@ -741,108 +746,130 @@ export default function HomePage({ navigation }) {
                         </TouchableOpacity>
                     </View>
 
-                    {todayLessons.length > 0 ? (
-                        <ScrollView
-                            ref={scrollViewRef}
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            contentContainerStyle={{ paddingHorizontal: 20 }}
-                        >
-                            {todayLessons.map((lesson, index) => {
-                                const isActive = isLessonActive(lesson);
+                    {/* Determine if we should show holiday view */
+                        (() => {
+                            const isHoliday = todayLessons.length === 0 || (todayLessons.length === 1 && (
+                                todayLessons[0].matiere?.toUpperCase().includes('CONGÉS') ||
+                                todayLessons[0].text?.toUpperCase().includes('CONGÉS') ||
+                                todayLessons[0].matiere?.toUpperCase().includes('VACANCES') ||
+                                todayLessons[0].text?.toUpperCase().includes('VACANCES') ||
+                                todayLessons[0].matiere?.toUpperCase().includes('FERIÉ')
+                            ));
 
-                                // Status Detection
-                                const isCancelled = lesson.isAnnule || lesson.statut === 'Annulé' || lesson.text?.toLowerCase().includes('absent') || lesson.text?.toLowerCase().includes('annulé');
-                                const isExam = lesson.test || lesson.interrogation || (lesson.text && (lesson.text.toLowerCase().includes('controle') || lesson.text.toLowerCase().includes('évaluation') || lesson.text.toLowerCase().includes('exam')));
-                                const isModified = !isCancelled && (lesson.isModifie || lesson.statut === 'Modifié' || (lesson.text && (lesson.text.toLowerCase().includes('changement') || lesson.text.toLowerCase().includes('salle'))));
+                            return !isHoliday ? (
+                                <ScrollView
+                                    ref={scrollViewRef}
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={{ paddingHorizontal: 20 }}
+                                >
+                                    {todayLessons.map((lesson, index) => {
+                                        const isActive = isLessonActive(lesson);
 
-                                const handlePress = () => {
-                                    navigation.navigate("CalendarTab");
-                                };
+                                        // Status Detection
+                                        const isCancelled = lesson.isAnnule || lesson.statut === 'Annulé' || lesson.text?.toLowerCase().includes('absent') || lesson.text?.toLowerCase().includes('annulé');
+                                        const isExam = lesson.test || lesson.interrogation || (lesson.text && (lesson.text.toLowerCase().includes('controle') || lesson.text.toLowerCase().includes('évaluation') || lesson.text.toLowerCase().includes('exam')));
+                                        const isModified = !isCancelled && (lesson.isModifie || lesson.statut === 'Modifié' || (lesson.text && (lesson.text.toLowerCase().includes('changement') || lesson.text.toLowerCase().includes('salle'))));
 
-                                return (
-                                    <GlassCard
-                                        key={index}
-                                        onPress={handlePress}
-                                        style={{
-                                            width: 165, // Slightly wider
-                                            height: 105, // Slightly taller
-                                            marginRight: 12,
-                                            padding: 0,
-                                            borderColor: isActive ? (lesson.color || '#a78bfa') : 'rgba(255,255,255,0.08)',
-                                            borderWidth: isActive ? 2.5 : 1, // Thicker border for active
-                                            borderRadius: 20,
-                                            overflow: 'hidden'
-                                        }}
-                                        gradient={
-                                            isActive ? (theme.dark ? ['rgba(255, 255, 255, 0.15)', 'rgba(255, 255, 255, 0.08)'] : ['#FFFFFF', '#FFFFFF']) :
-                                                isCancelled ? (theme.dark ? ['rgba(50, 20, 20, 0.4)', 'rgba(30, 10, 10, 0.4)'] : ['#FEE2E2', '#FEE2E2']) :
-                                                    Platform.select({
-                                                        android: theme.dark ? ['rgba(255, 255, 255, 0.05)', 'rgba(255, 255, 255, 0.02)'] : ['rgba(255, 255, 255, 0.8)', 'rgba(255, 255, 255, 0.6)'],
-                                                        ios: ['transparent', 'transparent']
-                                                    })
-                                        }
-                                    >
-                                        <View style={{ flexDirection: 'row', height: '100%', alignItems: 'center', paddingHorizontal: 12 }}>
-                                            {/* Neon Vertical Bar */}
-                                            <View style={{
-                                                width: 3,
-                                                height: '60%',
-                                                backgroundColor: isCancelled ? '#ef4444' : (lesson.color || '#a78bfa'),
-                                                borderRadius: 2,
-                                                marginRight: 14
-                                            }} />
+                                        const handlePress = () => {
+                                            navigation.navigate("CalendarTab");
+                                        };
 
-                                            <View style={{ flex: 1, paddingVertical: 10, justifyContent: 'center' }}>
-                                                {/* Status Badges - Absolute Top Right */}
-                                                {(isActive || isCancelled || isExam || isModified) && (
-                                                    <View style={{ position: 'absolute', top: 12, right: -12 }}>
-                                                        {isCancelled && <Text style={{ fontSize: 12 }}>❌</Text>}
-                                                        {isExam && !isCancelled && <Text style={{ fontSize: 12 }}>📝</Text>}
-                                                        {isModified && !isCancelled && !isExam && <Text style={{ fontSize: 12 }}>⚠️</Text>}
+                                        return (
+                                            <GlassCard
+                                                key={index}
+                                                onPress={handlePress}
+                                                style={{
+                                                    width: 165, // Slightly wider
+                                                    height: 105, // Slightly taller
+                                                    marginRight: 12,
+                                                    padding: 0,
+                                                    borderColor: isActive ? (lesson.color || '#a78bfa') : 'rgba(255,255,255,0.08)',
+                                                    borderWidth: isActive ? 2.5 : 1, // Thicker border for active
+                                                    borderRadius: 20,
+                                                    overflow: 'hidden'
+                                                }}
+                                                gradient={
+                                                    isActive ? (theme.dark ? ['rgba(255, 255, 255, 0.15)', 'rgba(255, 255, 255, 0.08)'] : ['#FFFFFF', '#FFFFFF']) :
+                                                        isCancelled ? (theme.dark ? ['rgba(50, 20, 20, 0.4)', 'rgba(30, 10, 10, 0.4)'] : ['#FEE2E2', '#FEE2E2']) :
+                                                            Platform.select({
+                                                                android: theme.dark ? ['rgba(255, 255, 255, 0.05)', 'rgba(255, 255, 255, 0.02)'] : ['rgba(255, 255, 255, 0.8)', 'rgba(255, 255, 255, 0.6)'],
+                                                                ios: ['transparent', 'transparent']
+                                                            })
+                                                }
+                                            >
+                                                <View style={{ flexDirection: 'row', height: '100%', alignItems: 'center', paddingHorizontal: 12 }}>
+                                                    {/* Neon Vertical Bar */}
+                                                    <View style={{
+                                                        width: 3,
+                                                        height: '60%',
+                                                        backgroundColor: isCancelled ? '#ef4444' : (lesson.color || '#a78bfa'),
+                                                        borderRadius: 2,
+                                                        marginRight: 14
+                                                    }} />
+
+                                                    <View style={{ flex: 1, paddingVertical: 10, justifyContent: 'center' }}>
+                                                        {/* Status Badges - Absolute Top Right */}
+                                                        {(isActive || isCancelled || isExam || isModified) && (
+                                                            <View style={{ position: 'absolute', top: 12, right: -12 }}>
+                                                                {isCancelled && <Text style={{ fontSize: 12 }}>❌</Text>}
+                                                                {isExam && !isCancelled && <Text style={{ fontSize: 12 }}>📝</Text>}
+                                                                {isModified && !isCancelled && !isExam && <Text style={{ fontSize: 12 }}>⚠️</Text>}
+                                                            </View>
+                                                        )}
+
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                                                            <Clock color={isActive ? (theme.dark ? "#FFF" : theme.colors.primary) : (theme.dark ? "rgba(255,255,255,0.6)" : theme.colors.onSurfaceDisabled)} size={12} strokeWidth={2.5} />
+                                                            <Text style={{
+                                                                color: isActive ? (theme.dark ? "#FFF" : theme.colors.primary) : (theme.dark ? "rgba(255,255,255,0.8)" : theme.colors.onSurface),
+                                                                fontSize: 12, fontWeight: '700', marginLeft: 6,
+                                                                textDecorationLine: isCancelled ? 'line-through' : 'none',
+                                                                opacity: isCancelled ? 0.6 : 1
+                                                            }}>
+                                                                {formatTime(lesson.start_date)}
+                                                                {lesson.end_date && ` - ${formatTime(lesson.end_date)}`}
+                                                            </Text>
+                                                        </View>
+
+                                                        {/* Subject Title */}
+                                                        <Text style={{
+                                                            color: theme.dark ? '#FFF' : theme.colors.onSurface, fontSize: 15, fontWeight: '700', marginBottom: 4,
+                                                            textDecorationLine: isCancelled ? 'line-through' : 'none',
+                                                            opacity: isCancelled ? 0.6 : 1,
+                                                            textShadowColor: theme.dark ? 'rgba(0,0,0,0.3)' : 'transparent', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2
+                                                        }} numberOfLines={2}>
+                                                            {lesson.matiere || lesson.text}
+                                                        </Text>
+
+                                                        {/* Room */}
+                                                        <Text style={{ color: theme.dark ? 'rgba(255,255,255,0.5)' : theme.colors.onSurfaceDisabled, fontSize: 12, fontWeight: '600' }}>
+                                                            {lesson.salle || 'Salle inconnue'}
+                                                        </Text>
                                                     </View>
-                                                )}
-
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-                                                    <Clock color={isActive ? (theme.dark ? "#FFF" : theme.colors.primary) : (theme.dark ? "rgba(255,255,255,0.6)" : theme.colors.onSurfaceDisabled)} size={12} strokeWidth={2.5} />
-                                                    <Text style={{
-                                                        color: isActive ? (theme.dark ? "#FFF" : theme.colors.primary) : (theme.dark ? "rgba(255,255,255,0.8)" : theme.colors.onSurface),
-                                                        fontSize: 12, fontWeight: '700', marginLeft: 6,
-                                                        textDecorationLine: isCancelled ? 'line-through' : 'none',
-                                                        opacity: isCancelled ? 0.6 : 1
-                                                    }}>
-                                                        {formatTime(lesson.start_date)}
-                                                        {lesson.end_date && ` - ${formatTime(lesson.end_date)}`}
-                                                    </Text>
                                                 </View>
-
-                                                {/* Subject Title */}
-                                                <Text style={{
-                                                    color: theme.dark ? '#FFF' : theme.colors.onSurface, fontSize: 15, fontWeight: '700', marginBottom: 4,
-                                                    textDecorationLine: isCancelled ? 'line-through' : 'none',
-                                                    opacity: isCancelled ? 0.6 : 1,
-                                                    textShadowColor: theme.dark ? 'rgba(0,0,0,0.3)' : 'transparent', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2
-                                                }} numberOfLines={2}>
-                                                    {lesson.matiere || lesson.text}
-                                                </Text>
-
-                                                {/* Room */}
-                                                <Text style={{ color: theme.dark ? 'rgba(255,255,255,0.5)' : theme.colors.onSurfaceDisabled, fontSize: 12, fontWeight: '600' }}>
-                                                    {lesson.salle || 'Salle inconnue'}
-                                                </Text>
-                                            </View>
+                                            </GlassCard>
+                                        );
+                                    })}
+                                </ScrollView>
+                            ) : (
+                                <View style={{ paddingHorizontal: 20 }}>
+                                    <GlassCard style={{ paddingVertical: 25, alignItems: 'center' }}>
+                                        <View style={{
+                                            width: 50, height: 50, borderRadius: 25,
+                                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                                            alignItems: 'center', justifyContent: 'center',
+                                            marginBottom: 10
+                                        }}>
+                                            <Text style={{ fontSize: 24 }}>🌴</Text>
                                         </View>
+                                        <Text style={{ color: theme.colors.onBackground, fontSize: 18, fontWeight: '800', marginBottom: 4 }}>Bonnes vacances !</Text>
+                                        <Text style={{ color: theme.colors.onSurfaceDisabled, fontSize: 13, textAlign: 'center' }}>
+                                            Profite bien de ton repos mérité. ☀️
+                                        </Text>
                                     </GlassCard>
-                                );
-                            })}
-                        </ScrollView>
-                    ) : (
-                        <View style={{ paddingHorizontal: 20 }}>
-                            <GlassCard style={{ paddingVertical: 30, alignItems: 'center' }}>
-                                <Text style={{ color: '#6b7280', fontSize: 15 }}>Aucun cours aujourd'hui 🎉</Text>
-                            </GlassCard>
-                        </View>
-                    )}
+                                </View>
+                            );
+                        })()}
                 </View>
 
                 {/* Upcoming Homework */}

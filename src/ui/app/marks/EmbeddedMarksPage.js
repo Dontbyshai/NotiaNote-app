@@ -51,41 +51,62 @@ function EmbeddedMarksPage({ navigation }) {
 
   // Get periods of student (and update at every change)
   const [periods, setPeriods] = useState({});
+  // 1. Initial Fetch (or when account changes)
   useEffect(() => {
-    const fetchData = async () => {
+    const initFetch = async () => {
+      const targetID = accountID || mainAccount?.id;
+      if (!targetID) return;
+
       const data = await StorageHandler.getData("marks");
-      var cacheData = data ?? {};
-      if (accountID in cacheData) {
-        setPeriods(cacheData[accountID].data);
+      const cacheData = data ?? {};
+
+      if (targetID in cacheData) {
+        setPeriods(cacheData[targetID].data);
       } else {
-        setPeriods({});
-        // If nothing in cache, force a refresh
-        refreshMarks();
+        // Only force refresh if cache is empty
+        refreshMarks(targetID);
       }
     };
-    fetchData();
-  }, [accountID, globalDisplayUpdater]);
+    initFetch();
+  }, [accountID, mainAccount]); // Remove globalDisplayUpdater from here!
 
-  // Refresh data when screen is focused
+  // 2. Listen for external updates (e.g. from pull-to-refresh or other screens)
   useEffect(() => {
-    if (isFocused) {
-      refreshMarks();
-    }
-  }, [isFocused, accountID]);
+    const updateUI = async () => {
+      const targetID = accountID || mainAccount?.id;
+      if (!targetID) return;
 
-  async function refreshMarks() {
+      const data = await StorageHandler.getData("marks");
+      if (data && data[targetID]) {
+        setPeriods(data[targetID].data);
+      }
+    };
+    updateUI();
+  }, [globalDisplayUpdater]); // Only update UI, don't trigger fetch
+
+  // Refresh data when screen is focused - DISABLED TO PREVENT LOOP
+  // useEffect(() => {
+  //   if (isFocused) {
+  //     refreshMarks();
+  //   }
+  // }, [isFocused, accountID]);
+
+  async function refreshMarks(explicitID = null) {
+    const targetID = explicitID || accountID || mainAccount?.id;
+    if (!targetID) return;
+
     // Only show loading if we have NO data yet to avoid flickering
     // Check local state first (smoothest), then cache
     const hasDataOnScreen = periods && Object.keys(periods).length > 0;
 
     if (!hasDataOnScreen) {
       const currentData = await StorageHandler.getData("marks");
-      const hasCacheData = currentData && currentData[accountID];
+      const hasCacheData = currentData && currentData[targetID];
       if (!hasCacheData) setLoading(true);
     }
 
     try {
-      await MarksHandler.getMarks(accountID);
+      await MarksHandler.getMarks(targetID);
     } catch (e) {
       console.warn("[MarksPage] Failed to refresh marks:", e);
     } finally {
@@ -193,17 +214,7 @@ function EmbeddedMarksPage({ navigation }) {
         showAppreciations={showAppreciations}
         onAddMark={(subject) => {
           setSelectedSubjectForSim(subject);
-
-          // Lancement direct de la pub sans confirmation
-          AdsHandler.showRewardedAd(
-            () => { // On Reward
-              setAddMarkModalVisible(true);
-            },
-            () => { // On Closed
-              // Rien de spécial
-            },
-            'create_note'
-          );
+          setAddMarkModalVisible(true);
         }}
       />
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Alert, Platform, Modal, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Alert, Platform, Modal, FlatList, Linking } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -28,12 +28,45 @@ const formatDate = (dateString) => {
     });
 };
 
+// Component to render text with clickable links
+const LinkifiedText = ({ text, style, theme }) => {
+    // Regex to detect URLs
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+
+    return (
+        <Text style={style}>
+            {parts.map((part, index) => {
+                if (part.match(urlRegex)) {
+                    return (
+                        <Text
+                            key={index}
+                            style={{ color: theme.colors.primary || '#3B82F6', textDecorationLine: 'underline' }}
+                            onPress={() => {
+                                Linking.openURL(part).catch(err => {
+                                    Alert.alert('Erreur', 'Impossible d\'ouvrir le lien');
+                                    console.error('Failed to open URL:', err);
+                                });
+                            }}
+                        >
+                            {part}
+                        </Text>
+                    );
+                }
+                return <Text key={index}>{part}</Text>;
+            })}
+        </Text>
+    );
+};
+
 export default function MessageDetailsPage() {
     const route = useRoute();
     const navigation = useNavigation();
     const insets = useSafeAreaInsets();
     const { theme } = useGlobalAppContext();
-    const { accountID } = useCurrentAccountContext();
+    const { accountID: contextAccountID, mainAccount } = useCurrentAccountContext();
+    // Fix: Fallback to mainAccount.id if context ID is undefined
+    const accountID = (contextAccountID && contextAccountID !== "undefined") ? contextAccountID : ((mainAccount?.id && mainAccount.id !== "undefined") ? mainAccount.id : null);
     const { message } = route.params || {};
 
     const [content, setContent] = useState("");
@@ -85,7 +118,9 @@ export default function MessageDetailsPage() {
         setDownloading(true);
         try {
             console.log("Starting download via API Service...");
-            const base64data = await EcoleDirecteApi.downloadAttachment(file.id);
+            // Fix: Use FICHIER_CDT instead of MESSAGE_PIECE_JOINTE
+            // MESSAGE_PIECE_JOINTE is not recognized by the download endpoint, causing 520 errors
+            const base64data = await EcoleDirecteApi.downloadAttachment(file.id, "FICHIER_CDT");
 
             // Check for HTML Error Page (Redirect) inside Base64
             if (base64data && base64data.length < 5000) {
@@ -230,7 +265,7 @@ export default function MessageDetailsPage() {
                     {loading ? (
                         <ActivityIndicator color={theme.colors.primary} />
                     ) : (
-                        <Text style={styles.bodyText}>{content || "Aucun contenu."}</Text>
+                        <LinkifiedText text={content || "Aucun contenu."} style={styles.bodyText} theme={theme} />
                     )}
                 </View>
 

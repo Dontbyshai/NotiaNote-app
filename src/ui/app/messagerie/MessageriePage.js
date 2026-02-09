@@ -25,7 +25,10 @@ export default function MessageriePage() {
     const navigation = useNavigation();
     const isFocused = useIsFocused();
     const insets = useSafeAreaInsets();
-    const { accountID } = useCurrentAccountContext();
+    const { accountID: contextAccountID, mainAccount } = useCurrentAccountContext();
+    // Fix: Calculate effective ID to handle cases where contextAccountID is undefined
+    const accountID = (contextAccountID && contextAccountID !== "undefined") ? contextAccountID : ((mainAccount?.id && mainAccount.id !== "undefined") ? mainAccount.id : null);
+
     const { theme } = useGlobalAppContext();
 
     const [messages, setMessages] = useState([]);

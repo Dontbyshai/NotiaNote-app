@@ -65,7 +65,9 @@ function SettingsPage({ navigation }) {
   const [checking, setChecking] = useState(false);
 
   useEffect(() => {
-    checkConnection();
+    // Disable auto-check to prevent 2FA popup loops
+    // checkConnection();
+    if (mainAccount) setConnectionStatus('connected');
   }, [mainAccount]);
 
   const checkConnection = async () => {
@@ -167,16 +169,17 @@ function SettingsPage({ navigation }) {
               <CustomProfilePhoto accountID={mainAccount?.id} size={90} />
             </View>
 
-            <Text style={{ color: theme.dark ? '#FFF' : theme.colors.onBackground, fontSize: 22, fontFamily: 'Text-Bold', fontWeight: 'bold', marginBottom: 5 }}>
-              {mainAccount?.firstName ? `${mainAccount.firstName} ${mainAccount.lastName || ''}` : ''}
+            <Text style={{ color: theme.dark ? '#FFF' : theme.colors.onBackground, fontSize: 20, fontFamily: 'Text-Bold', fontWeight: 'bold', marginBottom: 8, textAlign: 'center' }}>
+              {mainAccount?.firstName || mainAccount?.prenom} {mainAccount?.lastName || mainAccount?.nom}
             </Text>
 
             <View style={{
-              backgroundColor: theme.dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
-              paddingHorizontal: 15, paddingVertical: 6, borderRadius: 20, marginBottom: 20
+              backgroundColor: 'rgba(139, 92, 246, 0.15)',
+              paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, marginBottom: 20,
+              borderWidth: 1, borderColor: 'rgba(139, 92, 246, 0.3)'
             }}>
-              <Text style={{ color: '#94A3B8', fontSize: 13, fontFamily: 'Text-Medium' }}>
-                {mainAccount?.grade || 'Chargement...'}
+              <Text style={{ color: '#A78BFA', fontSize: 13, fontFamily: 'Text-Bold' }}>
+                {mainAccount?.grade || (mainAccount?.classe ? mainAccount.classe.libelle : (mainAccount?.profile?.classe?.libelle || 'Élève'))}
               </Text>
             </View>
 
@@ -202,7 +205,7 @@ function SettingsPage({ navigation }) {
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Wifi size={16} color={connectionStatus === 'connected' ? "#4ADE80" : (connectionStatus === 'disconnected' ? "#EF4444" : "#94A3B8")} style={{ marginRight: 8 }} />
                 <Text style={{ color: theme.dark ? '#CBD5E1' : '#64748B', fontSize: 12, fontFamily: 'Text-Medium' }}>
-                  {checking ? "Vérification..." : (connectionStatus === 'connected' ? "Connecté" : "Etat inconnu")}
+                  {checking ? "Vérification..." : (connectionStatus === 'connected' ? "Connecté" : "Hors ligne")}
                 </Text>
               </View>
               <TouchableOpacity
@@ -315,7 +318,7 @@ function SettingsPage({ navigation }) {
           <View style={{ height: 50 }} />
         </ScrollView>
       </LinearGradient>
-    </View>
+    </View >
   );
 }
 

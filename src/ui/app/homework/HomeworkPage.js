@@ -27,7 +27,9 @@ import BannerAdComponent from "../../components/Ads/BannerAdComponent";
 function HomeworkPage({ navigation, route }) {
   const { theme } = useGlobalAppContext();
   const { isConnected, globalDisplayUpdater, updateGlobalDisplay } = useAppStackContext();
-  const { accountID } = useCurrentAccountContext();
+  const { accountID: contextAccountID, mainAccount } = useCurrentAccountContext();
+  // Fix: Calculate effective ID to handle cases where contextAccountID is undefined
+  const accountID = (contextAccountID && contextAccountID !== "undefined") ? contextAccountID : ((mainAccount?.id && mainAccount.id !== "undefined") ? mainAccount.id : null);
 
   const { cacheHomework, cacheSpecificHomework } = route.params;
 

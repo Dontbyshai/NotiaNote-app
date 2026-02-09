@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, ActivityIndicator, TouchableOpacity, ScrollView, Modal, Button, Alert, Image, Platform } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, ActivityIndicator, TouchableOpacity, ScrollView, Modal, Button, Alert, Image, Platform, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import QRCode from 'react-native-qrcode-svg';
 import Code39Barcode from '../../components/Code39Barcode';
 import Code128Barcode from '../../components/Code128Barcode';
-import { ChevronLeft, Info, Settings, Camera as CameraIcon, X } from 'lucide-react-native';
+import { ChevronLeft, Info, Settings, Camera as CameraIcon, X, Hash, Save } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -14,6 +14,8 @@ import AccountHandler from '../../../core/AccountHandler';
 import { useCurrentAccountContext } from '../../../util/CurrentAccountContext';
 import CustomProfilePhoto from '../../components/CustomProfilePhoto';
 import BannerAdComponent from '../../components/Ads/BannerAdComponent';
+import CustomTextInput from '../../components/CustomTextInput';
+import CustomButton from '../../components/CustomButton';
 
 const { width } = Dimensions.get('window');
 
@@ -38,6 +40,7 @@ export default function CantinePage() {
     const [showCamera, setShowCamera] = useState(false);
     const [permission, requestPermission] = useCameraPermissions();
     const [scanned, setScanned] = useState(false);
+    const [tempManualCode, setTempManualCode] = useState('');
 
     useEffect(() => {
         loadData();
@@ -57,15 +60,53 @@ export default function CantinePage() {
             if (savedOverride) setManualOverride(savedOverride);
 
             // Fetch Module Data
+            let foundBadge = null;
             if (userData && userData.modules) {
                 const cantineModule = userData.modules.find(m => m.code === "CANTINE_BARCODE");
                 if (cantineModule && cantineModule.enable) {
                     setModuleEnabled(true);
                     if (cantineModule.params?.numeroBadge) {
-                        setBarcodeNumber(cantineModule.params.numeroBadge);
+                        foundBadge = cantineModule.params.numeroBadge;
                     }
                 }
             }
+
+            // Fallback strategy to find the correct barcode (Search for ALL possible ED identifiers)
+            if (!foundBadge) {
+                // Priority 1: Official Badge / CodeBarre fields (Most reliable if they exist)
+                if (userData.badge && userData.badge !== "0") foundBadge = String(userData.badge);
+                else if (userData.codeBarre && userData.codeBarre !== "0") foundBadge = String(userData.codeBarre);
+
+                // Priority 2: numDossier (Often used for canteen)
+                else if (userData.numDossier && userData.numDossier !== "0") {
+                    foundBadge = String(userData.numDossier);
+                }
+                // Priority 3: Login ID 
+                else if (userData.loginID && userData.loginID !== "undefined" && userData.loginID !== "0") {
+                    foundBadge = String(userData.loginID);
+                }
+                // Priority 4: INE (National identifier)
+                else if (userData.ine) {
+                    foundBadge = String(userData.ine);
+                }
+                // Priority 5: UID (Custom unique ID)
+                else if (userData.uid) {
+                    foundBadge = String(userData.uid);
+                }
+                // Priority 6: Username
+                else if (userData.username) {
+                    foundBadge = String(userData.username);
+                }
+                // Priority 7: Account ID
+                else if (accountID) {
+                    foundBadge = String(accountID);
+                }
+
+                if (foundBadge) setModuleEnabled(true);
+            }
+
+            setBarcodeNumber(foundBadge);
+            if (foundBadge && !tempManualCode) setTempManualCode(foundBadge);
         } catch (e) {
             console.error(e);
         } finally {
@@ -104,9 +145,38 @@ export default function CantinePage() {
     };
 
     const resetManualCode = async () => {
-        setManualOverride(null);
-        await AccountHandler.setPreference(`cantine_override_${accountID}`, null);
-        Alert.alert("Réinitialisé", "Retour au code officiel.");
+        Alert.alert(
+            "Réinitialiser le code ?",
+            "Voulez-vous vraiment revenir au code officiel ?",
+            [
+                {
+                    text: "Annuler",
+                    style: "cancel"
+                },
+                {
+                    text: "Oui, réinitialiser",
+                    style: "destructive",
+                    onPress: async () => {
+                        setManualOverride(null);
+                        setTempManualCode('');
+                        await AccountHandler.setPreference(`cantine_override_${accountID}`, null);
+                        Alert.alert("Réinitialisé", "Retour au code officiel.");
+                    }
+                }
+            ]
+        );
+    };
+
+    const handleSaveManual = async () => {
+        if (!tempManualCode || tempManualCode.trim().length === 0) {
+            Alert.alert("Erreur", "Veuillez entrer un numéro de badge.");
+            return;
+        }
+        const val = tempManualCode.trim();
+        setManualOverride(val);
+        await AccountHandler.setPreference(`cantine_override_${accountID}`, val);
+        Alert.alert("Enregistré", `Le code ${val} a été sauvegardé.`);
+        setShowSettings(false);
     };
 
     const activeCode = manualOverride || barcodeNumber;
@@ -193,7 +263,7 @@ export default function CantinePage() {
             <LinearGradient colors={[theme.colors.primaryLight || theme.colors.primary || '#000', theme.colors.background]} style={StyleSheet.absoluteFill} />
 
             {/* Header */}
-            <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === 'android' ? 40 : 20) }]}>
+            <View style={[styles.header, { paddingTop: insets.top }]}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={{ ...styles.iconButton, backgroundColor: theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}>
                     <ChevronLeft color={theme.dark ? "#FFF" : theme.colors.onBackground} size={28} />
                 </TouchableOpacity>
@@ -229,13 +299,18 @@ export default function CantinePage() {
                         {/* User Info */}
                         <View style={styles.studentInfo}>
                             <CustomProfilePhoto
-                                accountID={accountID}
+                                accountID={user?.id || accountID}
                                 size={50}
                                 style={{ marginRight: 15 }}
                             />
                             <View>
                                 <Text style={styles.studentName}>{user?.firstName || user?.prenom} {user?.lastName || user?.nom}</Text>
-                                <Text style={styles.studentClass}>{user?.profile?.classe?.libelle || user?.classe?.libelle}</Text>
+                                <Text style={styles.studentClass}>
+                                    {user?.profile?.classe?.libelle || user?.classe?.libelle || "Classe inconnue"}
+                                </Text>
+                                <Text style={[styles.studentClass, { fontSize: 12, opacity: 0.8 }]}>
+                                    {user?.nomEtablissement || user?.etablissement?.nom || user?.school || ""}
+                                </Text>
                             </View>
                         </View>
 
@@ -320,6 +395,25 @@ export default function CantinePage() {
                                 </TouchableOpacity>
                             ))}
                         </View>
+
+                        <View style={[styles.separator, { backgroundColor: theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }]} />
+
+                        <Text style={styles.sectionTitle}>Saisie Manuelle</Text>
+                        <CustomTextInput
+                            label="Numéro de badge"
+                            icon={<Hash color={theme.dark ? "#94A3B8" : "black"} size={20} />}
+                            initialValue={tempManualCode || manualOverride || ""}
+                            onChangeText={setTempManualCode}
+                            keyboardType="default"
+                            style={{ marginBottom: 15 }}
+                        />
+                        <TouchableOpacity
+                            style={[styles.actionButton, { backgroundColor: theme.colors.primary, marginBottom: 20 }]}
+                            onPress={handleSaveManual}
+                        >
+                            <Save color={theme.colors.primary === '#FAFAFA' ? "black" : "white"} size={20} style={{ marginRight: 10 }} />
+                            <Text style={[styles.actionButtonText, theme.colors.primary === '#FAFAFA' && { color: 'black' }]}>Enregistrer</Text>
+                        </TouchableOpacity>
 
                         <View style={[styles.separator, { backgroundColor: theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }]} />
 

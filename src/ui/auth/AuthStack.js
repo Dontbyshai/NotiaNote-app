@@ -5,6 +5,9 @@ import WelcomeScreen from "./WelcomeScreen";
 import LoginPage from "./LoginPage";
 import ChooseAccountPage from './ChooseAccountPage';
 import DoubleAuthPopup from '../components/DoubleAuthPopup';
+import PrivacyPolicyPage from '../app/settings/pages/PrivacyPolicyPage';
+import BugReportPage from '../app/settings/pages/BugReportPage';
+import ContactPage from '../app/settings/pages/ContactPage';
 
 
 // Create stack for navigation
@@ -37,6 +40,32 @@ function AuthStack({ setCameFromAuthStack }) {
           presentation: 'containedModal',
           headerShown: false,
           animation: 'fade_from_bottom',
+        }}
+      />
+
+      {/* Settings shared pages */}
+      <Stack.Screen
+        name="PrivacyPolicyPage"
+        component={PrivacyPolicyPage}
+        options={{
+          headerShown: false,
+          animation: 'slide_from_right',
+        }}
+      />
+      <Stack.Screen
+        name="BugReportPage"
+        component={BugReportPage}
+        options={{
+          headerShown: false,
+          animation: 'slide_from_right',
+        }}
+      />
+      <Stack.Screen
+        name="ContactPage"
+        component={ContactPage}
+        options={{
+          headerShown: false,
+          animation: 'slide_from_right',
         }}
       />
 

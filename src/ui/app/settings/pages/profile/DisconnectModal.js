@@ -9,7 +9,7 @@ import { useGlobalAppContext } from "../../../../../util/GlobalAppContext";
 // Disconnect modal
 function DisconnectModal({ isDisconnecting, setIsDisconnecting, disconnect }) {
   const { theme } = useGlobalAppContext();
-  
+
   return (
     <CustomConfirmModal
       visible={isDisconnecting}
@@ -30,8 +30,11 @@ function DisconnectModal({ isDisconnecting, setIsDisconnecting, disconnect }) {
         (<CustomButton
           key={3}
           title={<Text style={[theme.fonts.bodyLarge, { color: 'white', height: 25 }]}>Se déconnecter</Text>}
-          onPress={disconnect}
-          rightIcon={<ChevronRightIcon size={30} color={'white'}/>}
+          onPress={() => {
+            console.log("[DisconnectModal] 'Se déconnecter' button pressed");
+            disconnect();
+          }}
+          rightIcon={<ChevronRightIcon size={30} color={'white'} />}
           style={{
             backgroundColor: theme.colors.error,
             paddingVertical: 10,

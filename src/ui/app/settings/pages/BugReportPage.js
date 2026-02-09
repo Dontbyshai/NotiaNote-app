@@ -1,5 +1,5 @@
 import { memo, useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Dimensions, Alert, Platform } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Dimensions, Alert, Platform, KeyboardAvoidingView } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronLeftIcon, BugIcon, HelpCircle, Send } from "lucide-react-native";
@@ -166,102 +166,108 @@ function BugReportPage({ navigation, route }) {
           theme={theme}
         />
 
-        <ScrollView contentContainerStyle={{ paddingBottom: 50 }}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1 }}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 0}
+        >
+          <ScrollView contentContainerStyle={{ paddingBottom: 50 }}>
 
-          {/* Top Icon */}
-          <View style={{ alignItems: 'center', paddingTop: 20, paddingBottom: 30 }}>
-            <View style={{
-              width: 100, height: 100, borderRadius: 50,
-              backgroundColor: isSuggestionMode ? 'rgba(139, 92, 246, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-              alignItems: 'center', justifyContent: 'center',
-              borderWidth: 1, borderColor: isSuggestionMode ? '#8B5CF6' : '#EF4444',
-              shadowColor: isSuggestionMode ? '#8B5CF6' : '#EF4444', shadowRadius: 20, shadowOpacity: 0.3, elevation: 10
-            }}>
-              {isSuggestionMode ? (
-                <HelpCircle size={50} color="#8B5CF6" />
-              ) : (
-                <BugIcon size={50} color="#EF4444" />
-              )}
-            </View>
-          </View>
-
-          <View style={{ paddingHorizontal: 20 }}>
-
-            {/* Intro Text */}
-            <View style={{ marginBottom: 20 }}>
-              <Text style={{ color: theme.dark ? '#FFF' : theme.colors.onBackground, fontSize: 18, fontFamily: 'Text-Bold', fontWeight: 'bold', marginBottom: 5, textAlign: 'center' }}>
-                {isSuggestionMode ? "Une idée pour NotiaNote ?" : "Un problème technique ?"}
-              </Text>
-              <Text style={{ color: '#94A3B8', fontSize: 14, textAlign: 'center' }}>
-                {isSuggestionMode
-                  ? "Dites-nous ce qui pourrait rendre l'application encore meilleure. Nous lisons toutes les suggestions !"
-                  : "Décrivez le bug rencontré. Plus vous donnez de détails, plus vite nous pourrons le corriger."}
-              </Text>
+            {/* Top Icon */}
+            <View style={{ alignItems: 'center', paddingTop: 20, paddingBottom: 30 }}>
+              <View style={{
+                width: 100, height: 100, borderRadius: 50,
+                backgroundColor: isSuggestionMode ? 'rgba(139, 92, 246, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                alignItems: 'center', justifyContent: 'center',
+                borderWidth: 1, borderColor: isSuggestionMode ? '#8B5CF6' : '#EF4444',
+                shadowColor: isSuggestionMode ? '#8B5CF6' : '#EF4444', shadowRadius: 20, shadowOpacity: 0.3, elevation: 10
+              }}>
+                {isSuggestionMode ? (
+                  <HelpCircle size={50} color="#8B5CF6" />
+                ) : (
+                  <BugIcon size={50} color="#EF4444" />
+                )}
+              </View>
             </View>
 
-            {/* Type Selector (Hidden in Suggestion Mode) */}
-            {!isSuggestionMode && (
-              <>
-                <Text style={[styles.label, { color: theme.dark ? '#94A3B8' : '#64748B' }]}>TYPE DE PROBLÈME</Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 20 }}>
-                  {Object.values(bugTypes).map(t => <TypeButton key={t.id} typeId={t.id} title={t.title} />)}
-                </View>
-              </>
-            )}
+            <View style={{ paddingHorizontal: 20 }}>
 
-            {/* Description */}
-            <Text style={[styles.label, { color: theme.dark ? '#94A3B8' : '#64748B' }]}>{isSuggestionMode ? "VOTRE IDÉE" : "DÉTAILS"}</Text>
-            <View style={[styles.inputContainer, { backgroundColor: theme.dark ? 'rgba(15, 23, 42, 0.4)' : '#FFFFFF', borderColor: theme.dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
-              <TextInput
-                style={{ color: theme.dark ? '#FFF' : theme.colors.onBackground, fontSize: 16, textAlignVertical: 'top', height: 120 }}
-                multiline
-                placeholder={isSuggestionMode ? "Je pense qu'il faudrait ajouter..." : "Décrivez le problème..."}
-                placeholderTextColor="#64748B"
-                value={bugDescription}
-                onChangeText={setBugDescription}
-                maxLength={500}
-              />
-              <Text style={{ textAlign: 'right', color: '#64748B', fontSize: 12, marginTop: 5 }}>{bugDescription.length}/500</Text>
-            </View>
+              {/* Intro Text */}
+              <View style={{ marginBottom: 20 }}>
+                <Text style={{ color: theme.dark ? '#FFF' : theme.colors.onBackground, fontSize: 18, fontFamily: 'Text-Bold', fontWeight: 'bold', marginBottom: 5, textAlign: 'center' }}>
+                  {isSuggestionMode ? "Une idée pour NotiaNote ?" : "Un problème technique ?"}
+                </Text>
+                <Text style={{ color: '#94A3B8', fontSize: 14, textAlign: 'center' }}>
+                  {isSuggestionMode
+                    ? "Dites-nous ce qui pourrait rendre l'application encore meilleure. Nous lisons toutes les suggestions !"
+                    : "Décrivez le bug rencontré. Plus vous donnez de détails, plus vite nous pourrons le corriger."}
+                </Text>
+              </View>
 
-            {/* Send Button */}
-            <TouchableOpacity
-              onPress={sendBugReport}
-              disabled={isSendingBugReport || (selectedBugType === 'other' ? sentSuggestion : sentBugReport)}
-              style={{
-                marginTop: 30,
-                backgroundColor: (selectedBugType === 'other' ? sentSuggestion : sentBugReport) ? '#10B981' : errorWhileSendingBugReport ? '#EF4444' : (isSuggestionMode ? '#8B5CF6' : theme.colors.primary),
-                paddingVertical: 15,
-                borderRadius: 16,
-                alignItems: 'center',
-                flexDirection: 'row', justifyContent: 'center',
-                shadowColor: (selectedBugType === 'other' ? sentSuggestion : sentBugReport) ? '#10B981' : (isSuggestionMode ? '#8B5CF6' : theme.colors.primary),
-                shadowOpacity: 0.3, shadowRadius: 10, shadowOffset: { height: 4, width: 0 }
-              }}
-            >
-              {isSendingBugReport ? <ActivityIndicator color="#FFF" style={{ marginRight: 10 }} /> : (
+              {/* Type Selector (Hidden in Suggestion Mode) */}
+              {!isSuggestionMode && (
                 <>
-                  {!(selectedBugType === 'other' ? sentSuggestion : sentBugReport) && !errorWhileSendingBugReport && (
-                    <Send size={20} color="#FFF" style={{ marginRight: 10 }} />
-                  )}
-                  <Text style={{ color: '#FFF', fontSize: 16, fontWeight: 'bold' }}>
-                    {(selectedBugType === 'other' ? sentSuggestion : sentBugReport)
-                      ? (isSuggestionMode ? "Merci pour l'idée !" : "Merci de votre aide !")
-                      : errorWhileSendingBugReport ? "Erreur" : (isSuggestionMode ? "Envoyer ma suggestion" : "Envoyer le signalement")}
-                  </Text>
+                  <Text style={[styles.label, { color: theme.dark ? '#94A3B8' : '#64748B' }]}>TYPE DE PROBLÈME</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 20 }}>
+                    {Object.values(bugTypes).map(t => <TypeButton key={t.id} typeId={t.id} title={t.title} />)}
+                  </View>
                 </>
               )}
-            </TouchableOpacity>
 
-            <View style={{ marginTop: 30, opacity: 0.7 }}>
-              <Text style={{ color: '#94A3B8', fontSize: 12, textAlign: 'justify', marginBottom: 10 }}>
-                {isSuggestionMode
-                  ? "Toutes les suggestions sont les bienvenues, mais nous ne pouvons pas garantir leur implémentation immédiate."
-                  : "Pour résoudre ce bug efficacement, ce rapport inclut des données techniques de session (identifiants sécurisés). Ces données servent uniquement au débogage et sont traitées confidentiellement."}
-              </Text>
+              {/* Description */}
+              <Text style={[styles.label, { color: theme.dark ? '#94A3B8' : '#64748B' }]}>{isSuggestionMode ? "VOTRE IDÉE" : "DÉTAILS"}</Text>
+              <View style={[styles.inputContainer, { backgroundColor: theme.dark ? 'rgba(15, 23, 42, 0.4)' : '#FFFFFF', borderColor: theme.dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
+                <TextInput
+                  style={{ color: theme.dark ? '#FFF' : theme.colors.onBackground, fontSize: 16, textAlignVertical: 'top', height: 120 }}
+                  multiline
+                  placeholder={isSuggestionMode ? "Je pense qu'il faudrait ajouter..." : "Décrivez le problème..."}
+                  placeholderTextColor="#64748B"
+                  value={bugDescription}
+                  onChangeText={setBugDescription}
+                  maxLength={500}
+                />
+                <Text style={{ textAlign: 'right', color: '#64748B', fontSize: 12, marginTop: 5 }}>{bugDescription.length}/500</Text>
+              </View>
+
+              {/* Send Button */}
+              <TouchableOpacity
+                onPress={sendBugReport}
+                disabled={isSendingBugReport || (selectedBugType === 'other' ? sentSuggestion : sentBugReport)}
+                style={{
+                  marginTop: 30,
+                  backgroundColor: (selectedBugType === 'other' ? sentSuggestion : sentBugReport) ? '#10B981' : errorWhileSendingBugReport ? '#EF4444' : (isSuggestionMode ? '#8B5CF6' : theme.colors.primary),
+                  paddingVertical: 15,
+                  borderRadius: 16,
+                  alignItems: 'center',
+                  flexDirection: 'row', justifyContent: 'center',
+                  shadowColor: (selectedBugType === 'other' ? sentSuggestion : sentBugReport) ? '#10B981' : (isSuggestionMode ? '#8B5CF6' : theme.colors.primary),
+                  shadowOpacity: 0.3, shadowRadius: 10, shadowOffset: { height: 4, width: 0 }
+                }}
+              >
+                {isSendingBugReport ? <ActivityIndicator color="#FFF" style={{ marginRight: 10 }} /> : (
+                  <>
+                    {!(selectedBugType === 'other' ? sentSuggestion : sentBugReport) && !errorWhileSendingBugReport && (
+                      <Send size={20} color="#FFF" style={{ marginRight: 10 }} />
+                    )}
+                    <Text style={{ color: '#FFF', fontSize: 16, fontWeight: 'bold' }}>
+                      {(selectedBugType === 'other' ? sentSuggestion : sentBugReport)
+                        ? (isSuggestionMode ? "Merci pour l'idée !" : "Merci de votre aide !")
+                        : errorWhileSendingBugReport ? "Erreur" : (isSuggestionMode ? "Envoyer ma suggestion" : "Envoyer le signalement")}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <View style={{ marginTop: 30, opacity: 0.7 }}>
+                <Text style={{ color: '#94A3B8', fontSize: 12, textAlign: 'justify', marginBottom: 10 }}>
+                  {isSuggestionMode
+                    ? "Toutes les suggestions sont les bienvenues, mais nous ne pouvons pas garantir leur implémentation immédiate."
+                    : "Pour résoudre ce bug efficacement, ce rapport inclut des données techniques de session (identifiants sécurisés). Ces données servent uniquement au débogage et sont traitées confidentiellement."}
+                </Text>
+              </View>
             </View>
-          </View>
-        </ScrollView>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </LinearGradient>
     </View>
   );

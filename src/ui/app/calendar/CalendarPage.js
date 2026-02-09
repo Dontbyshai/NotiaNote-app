@@ -18,7 +18,10 @@ import BannerAdComponent from '../../components/Ads/BannerAdComponent';
 function CalendarPage() {
     const insets = useSafeAreaInsets();
     const { theme } = useGlobalAppContext();
-    const { accountID } = useCurrentAccountContext();
+    const { accountID: contextAccountID, mainAccount } = useCurrentAccountContext();
+    // Fix: Calculate effective ID to handle cases where contextAccountID is undefined
+    const accountID = (contextAccountID && contextAccountID !== "undefined") ? contextAccountID : ((mainAccount?.id && mainAccount.id !== "undefined") ? mainAccount.id : null);
+
 
     // State
     const [selectedDate, setSelectedDate] = useState(new Date());
@@ -552,7 +555,7 @@ function CalendarPage() {
     };
 
     const filterDailyLessons = () => {
-        if (!lessons) return;
+        if (!lessons || !Array.isArray(lessons)) return;
         const dateStr = TimetableHandler.formatDate(selectedDate);
         console.log(`[CalendarPage] Filtering lessons for ${dateStr}. Total lessons: ${lessons.length}`);
 
@@ -927,19 +930,43 @@ function CalendarPage() {
                         <ActivityIndicator size="large" color={theme.colors.primary} />
                         <Text style={{ color: '#64748B', marginTop: 10 }}>Chargement...</Text>
                     </View>
-                ) : dailyLessons.length > 0 ? (
-                    dailyLessons.map((lesson, index) => (
-                        lesson.type === 'break' ? (
-                            <BreakCard key={`break-${index}`} item={lesson} />
-                        ) : (
-                            <CourseCard key={index} course={lesson} />
-                        )
-                    ))
                 ) : (
-                    <View style={{ marginTop: 50, alignItems: 'center', opacity: 0.7 }}>
-                        <CalendarDays size={48} color="#64748B" />
-                        <Text style={{ color: theme.colors.onBackground, fontSize: 18, fontWeight: 'bold', marginTop: 15 }}>Aucun cours</Text>
-                        <Text style={{ color: '#64748B', marginTop: 5 }}>Rien de prévu pour cette journée.</Text>
+                    <View style={{ marginBottom: 100 }}>
+                        {(() => {
+                            const isHoliday = dailyLessons.length === 0 || (dailyLessons.length === 1 && (
+                                dailyLessons[0].matiere?.toUpperCase().includes('CONGÉS') ||
+                                dailyLessons[0].text?.toUpperCase().includes('CONGÉS') ||
+                                dailyLessons[0].matiere?.toUpperCase().includes('VACANCES') ||
+                                dailyLessons[0].text?.toUpperCase().includes('VACANCES') ||
+                                dailyLessons[0].matiere?.toUpperCase().includes('FERIÉ')
+                            ));
+
+                            if (!isHoliday) {
+                                return dailyLessons.map((lesson, index) => {
+                                    if (lesson.type === 'break') {
+                                        return <BreakCard key={`break-${index}`} item={lesson} />;
+                                    }
+                                    return <CourseCard key={index} course={lesson} />;
+                                });
+                            } else {
+                                return (
+                                    <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 50, opacity: 0.7 }}>
+                                        <View style={{
+                                            width: 80, height: 80, borderRadius: 40,
+                                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                                            alignItems: 'center', justifyContent: 'center',
+                                            marginBottom: 15
+                                        }}>
+                                            <Text style={{ fontSize: 40 }}>🌴</Text>
+                                        </View>
+                                        <Text style={{ color: theme.colors.onBackground, fontSize: 20, fontWeight: 'bold' }}>Bonnes vacances !</Text>
+                                        <Text style={{ color: theme.colors.onSurfaceDisabled, fontSize: 14, textAlign: 'center', marginTop: 5, maxWidth: 250 }}>
+                                            Profite bien de ton repos mérité. ☀️{"\n"}Aucun cours prévu pour cette journée.
+                                        </Text>
+                                    </View>
+                                );
+                            }
+                        })()}
                     </View>
                 )}
 

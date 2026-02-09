@@ -112,7 +112,7 @@ function dateDiff(date1: Date, date2: Date): string {
 }
 
 function formatAverage(average: number, decimals: boolean = true): string {
-  if (!average) { return "--"; }
+  if (average === undefined || average === null || isNaN(average)) { return "--"; }
   if (decimals) { return average.toFixed(2).replace('.', ','); }
   return (Math.round(average * 100) / 100).toString().replace('.', ',');
 }
@@ -168,10 +168,12 @@ function decodeHtmlData(data: any): string {
 function parseHtmlData(data: any): string {
   const html = decodeHtmlData(data);
   return htmlToText(html, {
-    wordwrap: false,
+    wordwrap: 130, // Better readability
+    preserveNewlines: true,
     selectors: [
-      { selector: 'img', format: 'skip' }, // Skip images to avoid printing base64 data
-      { selector: 'a', options: { ignoreHref: true } } // Optional: cleaner links
+      { selector: 'img', format: 'skip' },
+      { selector: 'a', options: { ignoreHref: true } },
+      { selector: 'blockquote', format: 'blockquote' }
     ]
   });
 }

@@ -20,7 +20,7 @@ class MessagesHandler {
             "received-messages",
             accountID,
             url,
-            `data={ "anneeMessages": "${schoolYear}" }`,
+            `data=${JSON.stringify({ anneeMessages: schoolYear })}`,
             async (data) => {
                 console.log("[MessagesHandler] Raw data received");
                 const messages = data?.messages?.received || [];

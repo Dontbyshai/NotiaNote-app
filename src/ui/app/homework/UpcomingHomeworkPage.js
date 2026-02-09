@@ -19,7 +19,15 @@ function UpcomingHomeworkPage({ navigation, route }) {
   const { theme } = useGlobalAppContext();
   const insets = useSafeAreaInsets();
   const { isConnected, globalDisplayUpdater, updateGlobalDisplay } = useAppStackContext();
-  const { accountID, isGettingHomework, getHomework } = useCurrentAccountContext();
+  const { accountID: contextAccountID, mainAccount, isGettingHomework, getHomework } = useCurrentAccountContext();
+  // Fix: Calculate effective ID to handle cases where contextAccountID is undefined
+  const accountID = (contextAccountID && contextAccountID !== "undefined") ? contextAccountID : ((mainAccount?.id && mainAccount.id !== "undefined") ? mainAccount.id : null);
+
+  // Debug log to confirm ID resolution
+  useEffect(() => {
+    if (accountID) console.log(`[UpcomingHomework] Resolved Account ID: ${accountID}`);
+  }, [accountID]);
+
 
   // Initialize with empty structure, will be loaded from cache
   const [abstractHomeworks, setAbstractHomeworks] = useState({ days: {}, weeks: {}, homeworks: {} });
@@ -79,12 +87,12 @@ function UpcomingHomeworkPage({ navigation, route }) {
     }
   }, [viewMode]);
 
-  // Load Session History Logic
+  // Load Session History Logic (Pre-load in background)
   useEffect(() => {
-    if (viewMode === 'session' && !historyLoaded) {
+    if (accountID && isConnected && !historyLoaded) {
       loadSessionHistory();
     }
-  }, [viewMode]);
+  }, [accountID, isConnected]);
 
   const loadSessionHistory = async (force = false) => {
     setHistoryLoaded(true);
@@ -96,14 +104,16 @@ function UpcomingHomeworkPage({ navigation, route }) {
       processSessionCache(cache[accountID]);
     }
 
-    // 2. Fetch last 30 days (Sequentially to avoid cache write conflicts)
+    // 2. Fetch history (Sequentially to avoid cache write conflicts)
     const today = new Date();
     let needsReload = false;
 
     // Get current cache state for checking validity
     const currentCache = await StorageHandler.getData("specific-homework");
 
-    for (let i = 0; i < 30; i++) {
+    // Range: -3 (3 days in future) to 30 (30 days in past)
+    // We start from -3 to 30 to catch pre-filled sessions
+    for (let i = -3; i < 30; i++) {
       const d = new Date(today);
       d.setDate(d.getDate() - i);
       // Use local date components
@@ -199,7 +209,9 @@ function UpcomingHomeworkPage({ navigation, route }) {
 
   // Load homeworks on mount and when data updates
   useEffect(() => {
-    loadHomeworks();
+    if (accountID) {
+      loadHomeworks();
+    }
   }, [accountID, globalDisplayUpdater]);
 
   const loadHomeworks = async () => {
@@ -219,7 +231,25 @@ function UpcomingHomeworkPage({ navigation, route }) {
         });
 
         console.log("✅ Loaded homeworks:", newAbstractHomeworks);
-        setAbstractHomeworks(newAbstractHomeworks);
+        // Check if data is stale (missing 'content' or 'files' property which were recently added)
+        let isStale = false;
+        const firstDay = Object.keys(cacheData[accountID].data.days)[0];
+        if (firstDay && cacheData[accountID].data.days[firstDay].length > 0) {
+          const firstId = cacheData[accountID].data.days[firstDay][0];
+          const sampleHw = cacheData[accountID].data.homeworks[firstId];
+          // If 'content' is explicitly undefined OR empty string (potentially missed in prev fetch), verify.
+          // We can check if 'files' is undefined too, which means it definitely needs an update.
+          if (sampleHw && (sampleHw.content === undefined || sampleHw.files === undefined)) {
+            isStale = true;
+          }
+        }
+
+        if (isStale) {
+          console.log("🔄 Detected stale cache (missing fields). Force refreshing...");
+          refreshHomeworks();
+        } else {
+          setAbstractHomeworks(newAbstractHomeworks);
+        }
       } else {
         console.log("❌ No data for accountID:", accountID);
         console.log("🔄 Fetching homeworks from API...");
@@ -445,13 +475,31 @@ function UpcomingHomeworkPage({ navigation, route }) {
               style={{
                 color: homework.done ? '#64748B' : (theme.dark ? '#F8FAFC' : '#000000'),
                 fontSize: 15,
+                lineHeight: 20,
                 marginBottom: 8,
                 fontWeight: homework.done ? '400' : '600',
                 textDecorationLine: homework.done ? 'line-through' : 'none'
               }}
-              numberOfLines={isExpanded ? undefined : 2}
+              numberOfLines={isExpanded ? undefined : 1}
             >
-              {homework.title || "Devoir à faire"}
+              {(() => {
+                const rawContent = (homework.content || "").trim();
+
+                if (rawContent.length > 0) {
+                  // Get first line, remove excessive spaces
+                  let firstLine = rawContent.split('\n')[0].replace(/\s+/g, ' ').trim();
+
+                  // Truncate if too long (e.g. 50 chars)
+                  if (firstLine.length > 50) {
+                    firstLine = firstLine.substring(0, 50) + "...";
+                  }
+
+                  return firstLine;
+                }
+
+                if (homework.files && homework.files.length > 0) return "📄 Voir la pièce jointe";
+                return "Voir le détail du travail";
+              })()}
             </Text>
 
             <Text style={{ color: '#94A3B8', fontSize: 13 }}>

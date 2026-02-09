@@ -2,13 +2,16 @@ import { memo, useState, useEffect } from "react";
 import { View, Text, Switch, TouchableOpacity, ScrollView, Platform, Alert } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as Notifications from "expo-notifications";
+import * as BackgroundFetch from "expo-background-fetch";
 import {
     ChevronLeftIcon,
     ShieldCheckIcon,
     TrendingUpIcon,
     CalendarDaysIcon,
     FingerprintIcon,
-    EyeIcon
+    EyeIcon,
+    BellIcon
 } from "lucide-react-native";
 
 import AccountHandler from "../../../../core/AccountHandler";
@@ -74,6 +77,9 @@ const SecurityItem = ({ title, subtitle, icon, rightElement, color, theme, onPre
 function SecurityPrivacyPage({ navigation }) {
     const { theme } = useGlobalAppContext();
     const { updateGlobalDisplay } = useAppStackContext();
+    const { accountID: contextAccountID, mainAccount } = useCurrentAccountContext();
+    // Fix: Fallback to mainAccount.id if context ID is undefined
+    const accountID = (contextAccountID && contextAccountID !== "undefined") ? contextAccountID : ((mainAccount?.id && mainAccount.id !== "undefined") ? mainAccount.id : null);
 
     // Settings State
     const [useBioAuth, setUseBioAuth] = useState(false);
@@ -178,19 +184,10 @@ function SecurityPrivacyPage({ navigation }) {
                     <View style={[styles.cardContainer, { backgroundColor: theme.dark ? 'rgba(15, 23, 42, 0.4)' : '#FFFFFF', borderColor: theme.dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
                         <TouchableOpacity
                             onPress={() => {
-                                const options = [
-                                    { id: 'AUTO', title: 'Automatique (Actuel)' },
-                                    { id: 'YEAR', title: 'Moyenne de l\'Année' },
-                                    ...availablePeriods
-                                ];
-
                                 Alert.alert(
-                                    "Moyenne du Widget",
-                                    "Choisissez quelle moyenne afficher sur l'écran d'accueil :",
-                                    options.map(opt => ({
-                                        text: opt.title,
-                                        onPress: () => updatePref("widget_average_type", opt.id, setWidgetAverageType)
-                                    })).concat([{ text: "Annuler", style: "cancel" }])
+                                    "Pas encore disponible",
+                                    "Cette fonctionnalité sera disponible dans une prochaine mise à jour.",
+                                    [{ text: "OK" }]
                                 );
                             }}
                             style={{

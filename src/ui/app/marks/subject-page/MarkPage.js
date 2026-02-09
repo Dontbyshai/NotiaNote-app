@@ -40,44 +40,96 @@ function MarkPage({ navigation, route }) {
   }, [globalDisplayUpdater]);
 
   // Change mark coefficient
+  // Change mark coefficient
   async function changeCoefficient(newCoefficient) {
-    await MarksHandler.setCustomData(
-      accountID,
-      "marks",
-      `${mark.id}`,
-      "coefficient",
-      newCoefficient,
-      mark.periodID,
-    );
-    await MarksHandler.recalculateAverageHistory(accountID);
-    updateGlobalDisplay();
+    let targetID = accountID;
+
+    // Resolve targetID if missing
+    if (!targetID) {
+      const data = await StorageHandler.getData("marks");
+      const availableAccounts = Object.keys(data || {});
+      if (availableAccounts.length > 0) {
+        targetID = availableAccounts[0];
+      }
+    }
+
+    if (!targetID) {
+      Alert.alert("Erreur", "Compte introuvable pour changer le coefficient.");
+      return;
+    }
+
+    try {
+      await MarksHandler.setCustomData(
+        targetID,
+        "marks",
+        `${mark.id}`,
+        "coefficient",
+        newCoefficient,
+        mark.periodID,
+      );
+      await MarksHandler.recalculateAverageHistory(targetID);
+      updateGlobalDisplay();
+    } catch (e) {
+      console.error(e);
+      Alert.alert("Erreur", "Impossible de sauvegarder le coefficient.");
+    }
   }
+
   async function resetCustomCoefficient() {
-    await MarksHandler.removeCustomData(
-      accountID,
-      "marks",
-      `${mark.id}`,
-      "coefficient",
-      mark.periodID,
-    );
-    await MarksHandler.recalculateAverageHistory(accountID);
-    updateGlobalDisplay();
+    let targetID = accountID;
+
+    // Resolve targetID if missing
+    if (!targetID) {
+      const data = await StorageHandler.getData("marks");
+      const availableAccounts = Object.keys(data || {});
+      if (availableAccounts.length > 0) {
+        targetID = availableAccounts[0];
+      }
+    }
+
+    if (!targetID) return;
+
+    try {
+      await MarksHandler.removeCustomData(
+        targetID,
+        "marks",
+        `${mark.id}`,
+        "coefficient",
+        mark.periodID,
+      );
+      await MarksHandler.recalculateAverageHistory(targetID);
+      updateGlobalDisplay();
+    } catch (e) {
+      console.error(e);
+    }
   }
 
   // Change if mark is effective
+  // Change if mark is effective
   const [isEffective, setIsEffective] = useState(mark.isEffective ?? true);
   function toggleIsEffective() {
+    let targetID = accountID;
+
     asyncExpectedResult(
       async () => {
+        // Resolve targetID if missing
+        if (!targetID) {
+          const data = await StorageHandler.getData("marks");
+          const availableAccounts = Object.keys(data || {});
+          if (availableAccounts.length > 0) {
+            targetID = availableAccounts[0];
+          }
+        }
+
         await MarksHandler.setCustomData(
-          accountID,
+          targetID,
           "marks",
           mark.id,
           "isEffective",
           !mark.isEffective,
           mark.periodID,
         );
-        await MarksHandler.recalculateAverageHistory(accountID);
+        await MarksHandler.recalculateAverageHistory(targetID);
       },
       () => updateGlobalDisplay(),
       () => setIsEffective(!mark.isEffective),
@@ -188,10 +240,10 @@ function MarkPage({ navigation, route }) {
 
             <View style={{ alignItems: 'center', marginVertical: 10 }}>
               <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-                <Text style={{ fontSize: 64, color: '#FFF', fontFamily: 'Text-Bold', fontWeight: 'bold' }}>
-                  {!mark.isEffective && mark.valueStr ? '(' : ''}
+                <Text style={{ fontSize: 64, color: '#FFF', fontFamily: 'Text-Bold', fontWeight: 'bold', opacity: mark.isEffective ? 1 : 0.5 }}>
+                  {!mark.isEffective ? '(' : ''}
                   {mark.valueStr ? mark.valueStr : "--"}
-                  {!mark.isEffective && mark.valueStr ? ')' : ''}
+                  {!mark.isEffective ? ')' : ''}
                 </Text>
                 <Text style={{ fontSize: 24, color: 'rgba(255,255,255,0.7)', marginLeft: 4 }}>
                   {mark.valueOn ? `/${mark.valueOn}`.replace(".", ",") : "/--"}
@@ -291,7 +343,7 @@ function MarkPage({ navigation, route }) {
           )}
 
           {/* Influence Group */}
-          {(mark.generalAverageInfluence || mark.subjectAverageInfluence) && (
+          {mark.isEffective && (mark.generalAverageInfluence || mark.subjectAverageInfluence) && (
             <View style={{ marginBottom: 25 }}>
               <Text style={{ color: '#94A3B8', fontSize: 12, fontWeight: 'bold', marginBottom: 10, letterSpacing: 1, paddingLeft: 10 }}>INFLUENCE SUR LA MOYENNE</Text>
               <View style={{
@@ -336,7 +388,7 @@ function MarkPage({ navigation, route }) {
             }}>
               <CustomSimpleInformationCard
                 icon={isEffective ? <MegaphoneIcon size={20} color="#EF4444" /> : <MegaphoneOffIcon size={20} color="#EF4444" />}
-                content="Désactiver la note"
+                content={isEffective ? "Désactiver la note" : "Note désactivée"}
                 textStyle={{ color: '#EF4444' }}
                 style={{ backgroundColor: 'transparent' }}
                 rightIcon={

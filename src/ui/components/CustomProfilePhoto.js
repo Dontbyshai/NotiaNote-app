@@ -28,7 +28,7 @@ function CustomProfilePhoto({ accountID, onPress, size = 60, style, hasOtherPres
         const account = await AccountHandler.getSpecificAccount(accountID);
         if (!account || !isMounted.current) return;
 
-        let photoURL = account.photoURL || account.profile?.photo;
+        let photoURL = account.photo || account.photoURL || account.profile?.photo;
         if (!photoURL || photoURL === "" || photoURL === "0") {
           if (isMounted.current) setPhotoSource(null);
           return;
@@ -149,7 +149,7 @@ function CustomProfilePhoto({ accountID, onPress, size = 60, style, hasOtherPres
                 'Cookie': combinedCookie,
                 'X-Token': token,
                 'X-Gtk': gtkToken,
-                'User-Agent': 'Mozilla/5.0',
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
                 'Referer': 'https://www.ecoledirecte.com/'
               }
             });

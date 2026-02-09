@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import useState from "react-usestateref";
-import { StatusBar, useColorScheme, View, ActivityIndicator, Text, Platform } from "react-native";
+import { StatusBar, useColorScheme, View, ActivityIndicator, Text, Platform, AppState } from "react-native";
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useNavigation, NavigationContainer, DefaultTheme, DarkTheme } from "@react-navigation/native";
 import * as SplashScreen from "expo-splash-screen";
@@ -18,10 +18,12 @@ import AccountHandler from "../core/AccountHandler";
 import StorageHandler from "../core/StorageHandler";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BiometricLock from "./components/BiometricLock";
+import UltimateLoginEngine from "../core/UltimateLoginEngine";
 
 
 // App Root
 function AppRoot() {
+  console.log("[AppRoot] TRIGGER_V26_ULTRA_FORCE_FINAL");
   console.log("[AppRoot] Component rendering START");
   // Close SplashScreen once app is loaded
   const [isLoaded, setIsLoaded, isLoadedRef] = useState(false);
@@ -150,6 +152,25 @@ function AppRoot() {
     }, 10000); // 10 seconds
     return () => clearTimeout(timeout);
   }, []);
+
+  // AppState listener - refresh token when app becomes active
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      if (nextAppState === 'active') {
+        console.log('[AppRoot] App became active, refreshing session...');
+        try {
+          await UltimateLoginEngine.backgroundReLogin();
+          console.log('[AppRoot] Session refreshed successfully');
+        } catch (error) {
+          console.warn('[AppRoot] Token refresh failed:', error);
+        }
+      }
+    });
+
+    return () => subscription.remove();
+  }, [isLoggedIn]);
 
   if (!isLoaded) {
     console.log("[AppRoot] Still loading, showing spinner...");

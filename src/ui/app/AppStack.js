@@ -12,11 +12,21 @@ import HomeworkHandler from '../../core/HomeworkHandler';
 import HapticsHandler from '../../core/HapticsHandler';
 import { CurrentAccountContextProvider } from '../../util/CurrentAccountContext';
 import { AppStackContextProvider, useAppStackContext } from '../../util/AppStackContext';
+import { useNavigation } from '@react-navigation/native';
+import StorageHandler from '../../core/StorageHandler';
 
 
-// Create stack for navigation
+// Onboarding
+// Onboarding
+import OnboardingWelcomePage from '../onboarding/post-login/OnboardingWelcomePage';
+import OnboardingThemePage from '../onboarding/post-login/OnboardingThemePage';
+import OnboardingColorsPage from '../onboarding/post-login/OnboardingColorsPage';
+import OnboardingDataPage from '../onboarding/post-login/OnboardingDataPage';
+
 import ColorsHandler from '../../core/ColorsHandler';
 import OfflineBanner from '../components/OfflineBanner';
+
+// Create stack for navigation
 const Stack = createNativeStackNavigator();
 
 
@@ -30,13 +40,35 @@ function AppStack({ route, cameFromAuthStack }) {
       cameFromAuthStack={cameFromAuthStack}
     >
       <OfflineBanner />
-      <MainAndSettingsStack />
+      <MainAndSettingsStack cameFromAuthStack={cameFromAuthStack} />
     </AppStackContextProvider>
   );
 }
 
-function MainAndSettingsStack() {
+function MainAndSettingsStack({ cameFromAuthStack }) {
   const { refreshLogin, isConnected, isConnecting, updateGlobalDisplay } = useAppStackContext();
+  const navigation = useNavigation();
+
+  // Onboarding Logic
+  const [isOnboardingChecked, setIsOnboardingChecked] = useState(false);
+  const [initialRoute, setInitialRoute] = useState("MainStack");
+
+  useEffect(() => {
+    async function checkOnboarding() {
+      // Only check if we just logged in (cameFromAuthStack)
+      console.log(`[AppStack] Checking onboarding. CameFromAuthStack: ${cameFromAuthStack}`);
+      if (cameFromAuthStack) {
+        const completed = await StorageHandler.getData("hasCompletedOnboarding");
+        console.log(`[AppStack] Has completed onboarding: ${completed}`);
+        if (!completed) {
+          console.log("[AppStack] Onboarding not completed, redirecting...");
+          setInitialRoute("OnboardingWelcomePage");
+        }
+      }
+      setIsOnboardingChecked(true);
+    }
+    checkOnboarding();
+  }, []);
 
   // Listen for color changes globally to update dependent views
   useEffect(() => {
@@ -48,23 +80,26 @@ function MainAndSettingsStack() {
   const [manualRefreshing, setManualRefreshing] = useState(false);
   const [mainAccount, setMainAccount] = useState({ "accountType": "E" });
   function updateMainAccount() { AccountHandler.getMainAccount().then(account => { if (account) { setMainAccount(account); } }); }
-  useEffect(() => { updateMainAccount(); }, [isConnected]);
+  useEffect(() => { updateMainAccount(); }, []); // Call on mount
+  useEffect(() => { updateMainAccount(); }, [isConnected]); // Call when connection changes
 
   // Select a student account to get marks from
   const [showMarksAccount, setShowMarksAccount] = useState({});
   useEffect(() => {
-    async function setup() {
-      // Check if account is already a student account
-      if (mainAccount.accountType == "E") {
+    const setup = async () => {
+      if (!mainAccount || !mainAccount.id) return;
+
+      if (mainAccount.accountType === "E") {
         await AccountHandler.setSelectedChildAccount(mainAccount.id);
         setShowMarksAccount(mainAccount);
-      } else {
-        await AccountHandler.setSelectedChildAccount(Object.keys(mainAccount.children)[0]);
-        setShowMarksAccount(Object.values(mainAccount.children)[0]);
+      } else if (mainAccount.children && Object.keys(mainAccount.children).length > 0) {
+        const childrenKeys = Object.keys(mainAccount.children);
+        await AccountHandler.setSelectedChildAccount(childrenKeys[0]);
+        setShowMarksAccount(mainAccount.children[childrenKeys[0]]);
       }
-    }
+    };
     setup();
-  }, [mainAccount.id]);
+  }, [mainAccount.id]); // specifically watch mainAccount.id
 
   // Marks
   const [_gotMarksForID, _setGotMarksForID, gotMarksForIDRef] = useState({});
@@ -126,6 +161,10 @@ function MainAndSettingsStack() {
     else if (manualRefreshing) { setManualRefreshing(false); }
   }, [isConnected, showMarksAccount.id, manualRefreshing]);
 
+  if (!isOnboardingChecked) {
+    return null; // or a loading spinner
+  }
+
   return (
     <CurrentAccountContextProvider
       // The account whose marks are displayed
@@ -136,7 +175,7 @@ function MainAndSettingsStack() {
       mainAccount={mainAccount}
       updateMainAccount={updateMainAccount}
 
-      _gotMarks={gotHomeworkForIDRef.current[showMarksAccount.id]}
+      _gotMarks={gotMarksForIDRef.current[showMarksAccount.id]}
       _isGettingMarks={gettingMarksForIDRef.current[showMarksAccount.id]}
       _errorGettingMarks={errorGettingMarksForIDRef.current[showMarksAccount.id]}
 
@@ -147,7 +186,7 @@ function MainAndSettingsStack() {
 
       manualRefreshing={manualRefreshing} setManualRefreshing={setManualRefreshing}
     >
-      <Stack.Navigator>
+      <Stack.Navigator initialRouteName={initialRoute}>
         <Stack.Screen
           name="MainStack"
           component={MainStack}
@@ -155,6 +194,28 @@ function MainAndSettingsStack() {
           initialParams={{
             newAccountID: 0,
           }}
+        />
+
+        {/* Onboarding Stack */}
+        <Stack.Screen
+          name="OnboardingWelcomePage"
+          component={OnboardingWelcomePage}
+          options={{ headerShown: false, animation: 'fade' }}
+        />
+        <Stack.Screen
+          name="OnboardingThemePage"
+          component={OnboardingThemePage}
+          options={{ headerShown: false, animation: 'slide_from_right' }}
+        />
+        <Stack.Screen
+          name="OnboardingColorsPage"
+          component={OnboardingColorsPage}
+          options={{ headerShown: false, animation: 'slide_from_right' }}
+        />
+        <Stack.Screen
+          name="OnboardingDataPage"
+          component={OnboardingDataPage}
+          options={{ headerShown: false, animation: 'slide_from_right' }}
         />
 
         {/* Settings */}
