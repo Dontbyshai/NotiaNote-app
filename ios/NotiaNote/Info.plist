@@ -19,7 +19,7 @@
     <key>CFBundlePackageType</key>
     <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
     <key>CFBundleShortVersionString</key>
-    <string>2.1.1</string>
+    <string>2.1.5</string>
     <key>CFBundleSignature</key>
     <string>????</string>
     <key>CFBundleURLTypes</key>
@@ -39,7 +39,7 @@
       </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>15</string>
+    <string>25</string>
     <key>GADApplicationIdentifier</key>
     <string>ca-app-pub-5759305174337781~8976608670</string>
     <key>GADDelayAppMeasurementInit</key>
@@ -56,18 +56,21 @@
       <true/>
     </dict>
     <key>NSCameraUsageDescription</key>
-    <string>NotiaNote a besoin de la caméra pour scanner votre carte de cantine.</string>
+    <string>NotiaNote a besoin d'accéder à votre caméra pour vous permettre de scanner le code-barres de votre carte de cantine physique afin de l'enregistrer dans l'application.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to use Face ID</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your microphone</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>NotiaNote a besoin de votre position pour trouver les établissements autour de vous.</string>
     <key>NSUserTrackingUsageDescription</key>
-    <string>Autorisez-vous les publicités personnalisées sur NotiaNote ?</string>
+    <string>Nous utilisons vos données pour vous proposer des publicités pertinentes et personnalisées (par exemple, des offres liées à l'éducation ou aux loisirs étudiants) via le réseau AdMob, ce qui nous aide à maintenir l'application gratuite.</string>
     <key>RCTNewArchEnabled</key>
     <true/>
     <key>UIBackgroundModes</key>
     <array>
       <string>fetch</string>
+      <string>remote-notification</string>
     </array>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
