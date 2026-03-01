@@ -5,12 +5,12 @@ import AccountHandler from '../core/AccountHandler';
 
 // Context needed to update all the app's screens when needed
 export const AppStackContext = createContext({
-  isConnected: Boolean,
-  isConnecting: Boolean,
-  refreshLogin: Function,
+  isConnected: false,
+  isConnecting: false,
+  refreshLogin: () => Promise.resolve(-1),
 
-  globalDisplayUpdater: Number,
-  updateGlobalDisplay: Function
+  globalDisplayUpdater: 0,
+  updateGlobalDisplay: () => { }
 });
 export const useAppStackContext = () => useContext(AppStackContext);
 

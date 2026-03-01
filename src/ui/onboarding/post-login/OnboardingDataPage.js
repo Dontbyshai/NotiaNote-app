@@ -54,7 +54,7 @@ export default function OnboardingDataPage({ navigation }) {
                 end={{ x: 1, y: 1 }}
             />
 
-            <View style={{ flex: 1, paddingTop: insets.top + 20, paddingHorizontal: 24 }}>
+            <View style={{ flex: 1, paddingTop: insets.top + 45, paddingHorizontal: 24 }}>
                 {/* Header */}
                 <View style={styles.header}>
                     <View style={styles.stepIndicator}>

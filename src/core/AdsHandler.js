@@ -41,12 +41,7 @@ class AdsHandler {
     try {
       console.log("[Ads] Starting setup...");
 
-      // 1. Check ATT on iOS
-      if (Platform.OS === 'ios') {
-        await this.checkATTConsent();
-      }
-
-      // 2. Handle GDPR/UMP Consent
+      // 1. Handle GDPR/UMP Consent First (Apple requirement: Show GDPR before ATT)
       if (checkForConsent) {
         try {
           const consentInfo = await AdsConsent.requestInfoUpdate();
@@ -58,6 +53,11 @@ class AdsHandler {
         } catch (consentError) {
           console.warn("[Ads] Consent info update failed (likely no form configured), continuing...", consentError);
         }
+      }
+
+      // 2. Check ATT on iOS Second
+      if (Platform.OS === 'ios') {
+        await this.checkATTConsent();
       }
 
       // 3. Initialize SDK

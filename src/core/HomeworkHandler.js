@@ -244,4 +244,5 @@ class HomeworkHandler {
   }
 }
 
+HomeworkHandler.default = HomeworkHandler;
 export default HomeworkHandler;

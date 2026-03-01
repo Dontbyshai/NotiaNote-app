@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { Image, Platform } from "react-native";
+import { Image, Platform, Text, View } from "react-native";
 import { PressableScale } from "react-native-pressable-scale";
 import { UserRoundIcon } from "lucide-react-native";
 import * as FileSystem from 'expo-file-system';
@@ -13,6 +13,7 @@ import { useGlobalAppContext } from "../../util/GlobalAppContext";
 function CustomProfilePhoto({ accountID, onPress, size = 60, style, hasOtherPressAction = false }) {
   const { theme } = useGlobalAppContext();
   const [photoSource, setPhotoSource] = useState(null);
+  const [debugMsg, setDebugMsg] = useState("");
   const isMounted = useRef(true);
 
   useEffect(() => {
@@ -30,7 +31,10 @@ function CustomProfilePhoto({ accountID, onPress, size = 60, style, hasOtherPres
 
         let photoURL = account.photo || account.photoURL || account.profile?.photo;
         if (!photoURL || photoURL === "" || photoURL === "0") {
-          if (isMounted.current) setPhotoSource(null);
+          if (isMounted.current) {
+            setPhotoSource(null);
+            setDebugMsg("NO_URL");
+          }
           return;
         }
 
@@ -61,21 +65,20 @@ function CustomProfilePhoto({ accountID, onPress, size = 60, style, hasOtherPres
         const gtkCookie = gtkData?.cookie || "";
         const photoCookie = await StorageHandler.getData("photoCookie") || "";
 
-        const mainAccount = await AccountHandler._getMainAccountOfAnyAccount(accountID);
-        const token = mainAccount?.connectionToken || "";
+        const token = (await StorageHandler.getData("token")) || "";
 
         const combinedCookie = [gtkCookie, photoCookie].filter(Boolean).join('; ');
 
-        // 3. Android Specific loading (Download then Show)
-        if (Platform.OS === 'android') {
-          // Fallback for base64
-          if (finalURL.startsWith('data:image')) {
-            if (isMounted.current) setPhotoSource({ uri: finalURL });
-            return;
-          }
+        // 3. Robust loading for both Android and iOS
+        // Fallback for base64
+        if (finalURL.startsWith('data:image')) {
+          if (isMounted.current) setPhotoSource({ uri: finalURL });
+          return;
+        }
 
+        if (Platform.OS === 'android') {
           const fileDir = `${FileSystem.cacheDirectory}profiles/`;
-          const fileName = `pp_${hashString(finalURL).replace(/-/g, 'n')}.jpg`;
+          const fileName = `pp_v4_${hashString(finalURL).replace(/-/g, 'n')}.jpg`;
           const localUri = `${fileDir}${fileName}`;
 
           const dirInfo = await FileSystem.getInfoAsync(fileDir);
@@ -95,17 +98,23 @@ function CustomProfilePhoto({ accountID, onPress, size = 60, style, hasOtherPres
             const tryDownload = async (url, includeAuth = true) => {
               console.log(`[Photo] 📥 Attempting download: ${url} (Auth: ${includeAuth})`);
               try {
-                const headers = includeAuth ? {
-                  'Cookie': combinedCookie,
-                  'X-Token': token,
-                  'X-Gtk': gtkToken,
-                  'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
-                  'Referer': 'https://www.ecoledirecte.com/',
-                } : {
-                  'User-Agent': 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36',
+                let isED = url.includes("ecoledirecte.com") || url.includes("awp");
+                let headers = {
+                  'User-Agent': isED ? 'BlocksDirecte/1.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) EDMOBILE v7.8.2' : 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36',
                 };
+                if (includeAuth && isED) {
+                  if (combinedCookie) headers['Cookie'] = combinedCookie;
+                  if (token) headers['X-Token'] = token;
+                  if (gtkToken) headers['X-Gtk'] = gtkToken;
+                }
                 await FileSystem.downloadAsync(url, localUri, { headers });
                 const ok = await checkFile(localUri);
+                if (!ok && isMounted.current) {
+                  const text = await FileSystem.readAsStringAsync(localUri, { length: 30, encoding: 'utf8' }).catch(() => "ERR");
+                  setDebugMsg(`FAIL${includeAuth ? 1 : 0}:${text}`);
+                } else if (ok && isMounted.current) {
+                  setDebugMsg("");
+                }
                 console.log(`[Photo] ${ok ? '✅ SUCCESS' : '❌ FAILED (Invalid file)'} for ${url}`);
                 return ok;
               } catch (e) {
@@ -141,23 +150,31 @@ function CustomProfilePhoto({ accountID, onPress, size = 60, style, hasOtherPres
             }
           }
         } else {
-          // iOS
+          // iOS Fallback directly to Image component
           if (isMounted.current) {
+            let isED = finalURL.includes("ecoledirecte.com") || finalURL.includes("awp");
+            let headers = {
+              'User-Agent': isED ? 'BlocksDirecte/1.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) EDMOBILE v7.8.2' : 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+            };
+            if (isED) {
+              if (combinedCookie) headers['Cookie'] = combinedCookie;
+              if (token) headers['X-Token'] = token;
+              if (gtkToken) headers['X-Gtk'] = gtkToken;
+            }
+
             setPhotoSource({
               uri: finalURL,
-              headers: {
-                'Cookie': combinedCookie,
-                'X-Token': token,
-                'X-Gtk': gtkToken,
-                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
-                'Referer': 'https://www.ecoledirecte.com/'
-              }
+              headers: headers
             });
+            setDebugMsg(""); // Ensure we clear debug message
           }
         }
       } catch (e) {
         console.warn("[CustomProfilePhoto] Error:", e);
-        if (isMounted.current) setPhotoSource(null);
+        if (isMounted.current) {
+          setPhotoSource(null);
+          setDebugMsg("CATCH:" + String(e.message || e).substring(0, 30));
+        }
       }
     };
 
@@ -195,7 +212,10 @@ function CustomProfilePhoto({ accountID, onPress, size = 60, style, hasOtherPres
           }}
         />
       ) : (
-        <UserRoundIcon size={size / 2} color={theme.colors.onSurfaceDisabled} />
+        <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+          <UserRoundIcon size={size / 2} color={theme.colors.onSurfaceDisabled} />
+          {debugMsg ? <Text style={{ fontSize: 8, color: 'red', position: 'absolute', textAlign: 'center', lineHeight: 10 }}>{debugMsg}</Text> : null}
+        </View>
       )}
     </PressableScale>
   );

@@ -39,7 +39,7 @@ function EvolutionChartModal({ visible, onClose, data }) {
     const { theme } = useGlobalAppContext();
     const [selectedPoint, setSelectedPoint] = useState(null);
 
-    if (!data || data.length < 2) return null;
+    if (!data || data.length === 0) return null;
 
     const width = Dimensions.get('window').width - 40;
     const height = 250; // Taller like image
@@ -47,7 +47,7 @@ function EvolutionChartModal({ visible, onClose, data }) {
 
     // Normalize data
     const validData = data.filter(d => d.value !== undefined);
-    if (validData.length < 2) return null;
+    if (validData.length === 0) return null;
 
     // Calculate Dynamic Min/Max
     let minVal = 20;
@@ -67,7 +67,7 @@ function EvolutionChartModal({ visible, onClose, data }) {
 
     const range = maxVal - minVal;
 
-    const scaleX = (index) => (index / (validData.length - 1)) * (width - 2 * padding) + padding + 10; // Shift right for Y labels
+    const scaleX = (index) => (validData.length > 1 ? (index / (validData.length - 1)) * (width - 2 * padding) + padding + 10 : width / 2);
     const scaleY = (value) => height - padding - ((value - minVal) / range) * (height - 2 * padding);
 
     // Generate Smooth Paths

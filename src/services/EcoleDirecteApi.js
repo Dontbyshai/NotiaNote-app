@@ -193,17 +193,21 @@ class EcoleDirecteApi {
 
     // --- Downloads ---
 
-    async downloadAttachment(fileId, fileType = "FICHIER_CDT", isRetry = false) {
+    async downloadAttachment(fileId, fileType = "FICHIER_CDT", isRetry = false, accountId = "") {
         const StorageHandler = require('../core/StorageHandler').default;
+        // Resolve accountId before try block so it's accessible in catch/retry
+        let resolvedAccountId = accountId;
 
         try {
             console.log(`[EcoleDirecteApi] Downloading ${fileId} (${fileType}) via Direct Fetch...`);
 
             // 1. Get Token & Headers
             const mainAccount = await AccountHandler.getMainAccount();
-            const token = mainAccount?.connectionToken || AccountHandler.temporaryLoginToken;
             const savedGtk = await StorageHandler.getData("gtk");
             const { cookie, gtk } = savedGtk || { cookie: "", gtk: "" };
+
+            // Resolve accountId from mainAccount if not explicitly provided
+            if (!resolvedAccountId) resolvedAccountId = String(mainAccount?.id || "");
 
             // 1. Prepare Request via ULTIMATE BRIDGE
             // We delegate the fetch to UltimateLoginEngine to ensure consistent Headers/Tokens/GTK
@@ -211,8 +215,8 @@ class EcoleDirecteApi {
 
             let text = "";
             try {
-                // This call uses the same bridge logic as Messages/Grades
-                text = await UltimateLoginEngine.downloadFile(fileId, fileType);
+                // Pass accountId so PIECE_JOINTE uses the account-scoped URL
+                text = await UltimateLoginEngine.downloadFile(fileId, fileType, resolvedAccountId);
             } catch (bridgeError) {
                 // Map specific bridge errors to something we catch below
                 if (bridgeError.message === "Token invalide !") {
@@ -223,17 +227,24 @@ class EcoleDirecteApi {
             // (No response object here, we got the text directly)
 
             // 4. Validate & Parse
-            console.log(`[EcoleDirecteApi] Bridge returned ${text.length} chars. Preview: ${text.substring(0, 100)}`);
+            const safeText = text || "";
+            console.log(`[EcoleDirecteApi] Bridge returned ${safeText.length} chars. Preview: ${safeText.substring(0, 100)}`);
 
-            if (text.startsWith("<!DOCTYPE") || text.includes("<html") || text.trim() === "") {
-                console.warn("[EcoleDirecteApi] Download returned HTML or Empty (Auth Error?)");
+            if (safeText.startsWith("<!DOCTYPE") || safeText.includes("<html")) {
+                // EcoleDirecte redirected to login page — genuine session issue, retry allowed
+                console.warn("[EcoleDirecteApi] Download returned HTML (Login Redirect)");
                 throw new Error("Session expirée ou invalide. Déconnexion requise.");
+            }
+            if (safeText.trim() === "") {
+                // Completely empty body from server — not a session issue, don't retry
+                console.warn("[EcoleDirecteApi] Download returned empty body (0 bytes)");
+                throw new Error("Fichier vide ou inaccessible. Essayez depuis EcoleDirecte web.");
             }
 
             // ED often wraps the base64 in a JSON object, OR returns it raw.
             try {
                 // Try parsing as JSON to detect errors/wrapper
-                const json = JSON.parse(text);
+                const json = JSON.parse(safeText);
 
                 // Check for Session Expiry / Login Page JSON pattern
                 if (json.accounts || (json.code >= 500) || (json.message)) {
@@ -262,8 +273,8 @@ class EcoleDirecteApi {
                 }
 
                 // It's likely the raw string
-                if (text.length > 50) {
-                    return text;
+                if (safeText.length > 50) {
+                    return safeText;
                 }
                 throw new Error("Contenu du fichier invalide (trop court)");
             }
@@ -280,7 +291,7 @@ class EcoleDirecteApi {
                     if (newToken) {
                         console.log("[EcoleDirecteApi] Re-login success. Retrying download directly...");
                         // Call itself recursively ONCE
-                        return this.downloadAttachment(fileId, fileType, true);
+                        return this.downloadAttachment(fileId, fileType, true, resolvedAccountId);
                     } else {
                         throw new Error("Impossible de rafraîchir la session. Veuillez relancer l'app.");
                     }

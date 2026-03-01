@@ -340,6 +340,7 @@ function UpcomingHomeworkPage({ navigation, route }) {
       if (taskDate < today) return;
 
       homeworks.forEach(homework => {
+        if (!homework) return; // FIX: Add safe check
         total++;
         if (homework.done) done++;
       });
@@ -359,7 +360,7 @@ function UpcomingHomeworkPage({ navigation, route }) {
 
     const subjectSet = new Set();
     Object.values(abstractHomeworks.homeworks).forEach(homework => {
-      if (homework.subjectID) subjectSet.add(homework.subjectID);
+      if (homework && homework.subjectID) subjectSet.add(homework.subjectID);
     });
 
     return Array.from(subjectSet);
@@ -370,15 +371,16 @@ function UpcomingHomeworkPage({ navigation, route }) {
   };
 
   const toggleDone = async (homework) => {
+    if (!homework) return;
     const newDoneStatus = !homework.done;
 
     // Update locally first
     if (abstractHomeworks?.days?.[homework.dueDate]) {
       const updatedHomeworks = { ...abstractHomeworks };
       const dayHomeworks = updatedHomeworks.days[homework.dueDate];
-      const index = dayHomeworks.findIndex(h => h.id === homework.id);
+      const index = dayHomeworks.findIndex(h => h && h.id === homework.id);
 
-      if (index !== -1) {
+      if (index !== -1 && dayHomeworks[index]) {
         dayHomeworks[index] = { ...dayHomeworks[index], done: newDoneStatus };
         setAbstractHomeworks(updatedHomeworks);
       }

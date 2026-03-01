@@ -12,6 +12,8 @@ import { useCurrentAccountContext } from '../../../util/CurrentAccountContext';
 import TimetableHandler from '../../../core/TimetableHandler';
 import HomeworkHandler from '../../../core/HomeworkHandler';
 import StorageHandler from '../../../core/StorageHandler';
+import EcoleDirecteApi from '../../../services/EcoleDirecteApi';
+import { parseHtmlData } from '../../../util/Utils';
 import ColorsHandler from '../../../core/ColorsHandler';
 import BannerAdComponent from '../../components/Ads/BannerAdComponent';
 
@@ -56,8 +58,26 @@ function CalendarPage() {
             if (teachers.length === 0) return;
 
             // 2. Fetch messages
-            const messages = await MessagesHandler.getReceivedMessages(accountID);
-            if (!messages || messages.length === 0) return;
+            const res = await EcoleDirecteApi.getMessages(accountID);
+            const allMessages = res?.data?.data?.messages?.received || [];
+
+            if (!allMessages || allMessages.length === 0) return;
+
+            // 3. Fetch Full Content sequentially to avoid rate-limiting (max 15)
+            const recentMessages = allMessages.slice(0, 15);
+            const messages = [];
+            for (const msg of recentMessages) {
+                try {
+                    const response = await EcoleDirecteApi.getMessageContent(accountID, msg.id);
+                    if (response?.status === 200 && response.data?.data) {
+                        messages.push({ ...msg, fullContent: parseHtmlData(response.data.data.content) });
+                    } else {
+                        messages.push({ ...msg, fullContent: "" });
+                    }
+                } catch (e) {
+                    messages.push({ ...msg, fullContent: "" });
+                }
+            }
 
             const foundEvents = {};
 
@@ -70,7 +90,7 @@ function CalendarPage() {
             const dayNames = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
 
             messages.forEach(msg => {
-                const content = (msg.subject + " " + (msg.content || "")).toLowerCase();
+                const content = (msg.subject + " " + (msg.fullContent || msg.content || "")).toLowerCase();
 
                 // --- A. GLOBAL EVENT BY DATE DETECTION ---
                 const hasGlobalKeyword = globalEventKeywords.some(kw => content.includes(kw));
@@ -102,8 +122,7 @@ function CalendarPage() {
 
                             coursesOnDate.forEach(c => {
                                 if (c.prof) {
-                                    // Only overwrite if not already set (or maybe overwrite is better?)
-                                    foundEvents[c.prof] = {
+                                    foundEvents[`${c.prof}_${dateStr}`] = {
                                         type: 'modification',
                                         subject: `GLOBAL: ${msg.subject}`,
                                         isGlobal: true
@@ -120,18 +139,68 @@ function CalendarPage() {
                 else if (modificationKeywords.some(kw => content.includes(kw))) eventType = 'modification';
 
                 if (eventType) {
+                    // Extract target dates
+                    const targetDates = new Set();
+                    const msgDateObj = msg.date ? new Date(msg.date) : new Date();
+
+                    if (content.includes('demain') || content.includes('lendemain')) {
+                        const tomorrow = new Date(msgDateObj);
+                        tomorrow.setDate(tomorrow.getDate() + 1);
+                        targetDates.add(tomorrow.toISOString().split('T')[0]);
+                    } else if (content.includes('après-demain') || content.includes('apres-demain')) {
+                        const afterTomorrow = new Date(msgDateObj);
+                        afterTomorrow.setDate(afterTomorrow.getDate() + 2);
+                        targetDates.add(afterTomorrow.toISOString().split('T')[0]);
+                    } else if (content.includes("aujourd'hui") || content.includes('ce jour')) {
+                        targetDates.add(msgDateObj.toISOString().split('T')[0]);
+                    }
+
+                    const knownDates = [...new Set(lessons.map(c => c.start_date.split(' ')[0]))]; // ["2026-02-23", ..., "2026-02-27"]
+                    for (const d of knownDates) {
+                        const dObj = new Date(d);
+                        const day = dObj.getDate();
+                        const month = dObj.getMonth() + 1;
+                        const dayStr = day < 10 ? '0' + day : '' + day;
+                        const monthStr = month < 10 ? '0' + month : '' + month;
+
+                        const patterns = [
+                            `${day} ${monthNames[month - 1]}`,
+                            `${dayStr} ${monthNames[month - 1]}`,
+                            `${day}/${month}`,
+                            `${dayStr}/${monthStr}`,
+                            `${day}/${monthStr}`
+                        ];
+                        if (patterns.some(p => content.includes(p))) {
+                            targetDates.add(d);
+                        }
+                    }
+
+                    if (targetDates.size === 0) {
+                        targetDates.add(msgDateObj.toISOString().split('T')[0]);
+                        if (msgDateObj.getHours() >= 16) {
+                            const tomorrow = new Date(msgDateObj);
+                            tomorrow.setDate(tomorrow.getDate() + 1);
+                            targetDates.add(tomorrow.toISOString().split('T')[0]);
+                        }
+                    }
+
                     teachers.forEach(teacher => {
-                        const cleanName = teacher.toLowerCase().replace(/^m\.|^mme\.|^mr\.|^dr\./, '').trim();
+                        let cleanName = teacher.toLowerCase().replace(/^m\.|^mme\.|^mr\.|^dr\./, '').trim();
+                        cleanName = cleanName.split(/[\s-]/)[0];
                         if (cleanName.length < 3) return;
 
+                        console.log(`[NLP Dbg] Checking teacher "${teacher}" -> "${cleanName}" against email: "${msg.subject}". Match: ${content.includes(cleanName)}`);
+
                         if (content.includes(cleanName)) {
-                            // If distinct match found
-                            if (!foundEvents[teacher] || foundEvents[teacher].isGlobal) { // Prefer specific over global? 
-                                foundEvents[teacher] = {
-                                    type: eventType,
-                                    subject: msg.subject,
-                                    date: msg.date
-                                };
+                            for (const d of targetDates) {
+                                const key = `${teacher}_${d}`;
+                                if (!foundEvents[key] || foundEvents[key].isGlobal) {
+                                    foundEvents[key] = {
+                                        type: eventType,
+                                        subject: msg.subject,
+                                        date: msg.date
+                                    };
+                                }
                             }
                         }
                     });
@@ -658,10 +727,12 @@ function CalendarPage() {
         const endTime = course.end_date.split(' ')[1].substring(0, 5);
 
         // 1. Native Cancellation
-        let isCancelled = course.isAnnule || course.status === 'isAnnule' || (course.prof && course.prof.toLowerCase().includes('annul'));
+        let isCancelled = course.isAnnule === true || course.status === 'isAnnule' || course.statut === 'Annulé' || course.typeCours === 'ANNULE' || (course.prof && (course.prof.toLowerCase().includes('annul') || course.prof.toLowerCase().includes('absent')));
+        if (course.text && course.text.includes("ITALIEN")) console.log(`[DS Dbg] ITALIEN course -> isCancelled: ${isCancelled}, isAnnule: ${course.isAnnule}, statut: ${course.statut}, typeCours: ${course.typeCours}`);
 
         // 2. Email Detected Cancellation/Event
-        const detectedEvent = course.prof ? suspectedEvents[course.prof] : null;
+        const courseDate = course.start_date.split(' ')[0];
+        const detectedEvent = course.prof ? suspectedEvents[`${course.prof}_${courseDate}`] : null;
         if (detectedEvent && detectedEvent.type === 'absence') {
             isCancelled = true;
         }
@@ -813,6 +884,7 @@ function CalendarPage() {
                             <Text style={{ fontSize: 32, fontFamily: 'Text-Bold', fontWeight: 'bold', color: theme.colors.onBackground }}>
                                 Emploi du temps
                             </Text>
+
 
                         </View>
                         <PressableScale

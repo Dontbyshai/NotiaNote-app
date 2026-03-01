@@ -1,5 +1,6 @@
 import AccountHandler from "./AccountHandler";
 import APIEndpoints from "./APIEndpoints";
+import { Alert } from "react-native";
 
 class MessagesHandler {
     // Fetch latest received messages
@@ -22,21 +23,11 @@ class MessagesHandler {
             url,
             `data=${JSON.stringify({ anneeMessages: schoolYear })}`,
             async (data) => {
-                console.log("[MessagesHandler] Raw data received");
                 const messages = data?.messages?.received || [];
-                console.log("[MessagesHandler] Extracted", messages.length, "messages");
                 return messages;
             }
         ).then(result => {
-            if (Array.isArray(result)) {
-                console.log("[MessagesHandler] Returning", result.length, "messages");
-                return result;
-            }
-            console.warn("[MessagesHandler] Result is not an array");
-            return [];
-        }).catch((err) => {
-            console.error("[MessagesHandler] Error:", err);
-            return [];
+            return result;
         });
     }
 

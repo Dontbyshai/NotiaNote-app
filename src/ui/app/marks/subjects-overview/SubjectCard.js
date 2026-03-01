@@ -49,7 +49,6 @@ function EmbeddedSubjectCard({
 
   const averageColor = getDiffColor(subject.average, subject.classAverage);
 
-  // Evolution Arrow Logic
   function getEvolutionData() {
     if (!showEvolutionArrows || !subject.averageHistory || subject.averageHistory.length < 2) return null;
     const history = subject.averageHistory;
@@ -62,18 +61,16 @@ function EmbeddedSubjectCard({
   }
   const evolution = getEvolutionData();
 
-  // Parse appreciations
-  // Secure access to appreciations (API can return strings or non-arrays)
+  // Handle both array and string appreciations (API can be inconsistent)
   const rawAppreciations = subject.appreciations;
-  const appreciationsArray = Array.isArray(rawAppreciations) ? rawAppreciations : [];
-  const appreciationText = appreciationsArray.map(a => {
-    // Already decoded in MarksHandler
-    // Wait, MarksHandler stored decoded strings?
-    // Let's check MarksHandler again. Yes: .map(parseHtmlData).
-    return a;
-  }).join("\n\n");
+  let appreciationText = "";
+  if (Array.isArray(rawAppreciations)) {
+    appreciationText = rawAppreciations.join("\n\n");
+  } else if (typeof rawAppreciations === 'string') {
+    appreciationText = rawAppreciations;
+  }
 
-  const showAppreciationView = showAppreciations && appreciationText && appreciationText.length > 0;
+  const showAppreciationView = showAppreciations;
 
   return (
     <PressableScale
@@ -104,7 +101,7 @@ function EmbeddedSubjectCard({
               {subject.title}
             </Text>
             <Text style={{ color: theme.colors.onSurfaceDisabled || '#94A3B8', fontSize: 12, fontFamily: 'Text-Medium', marginTop: 2 }}>
-              Coef: {subject.coef || 1}
+              Coef: {subject.coefficient || subject.coef || 1}
             </Text>
           </View>
 
@@ -115,7 +112,7 @@ function EmbeddedSubjectCard({
                 color: averageColor,
                 fontSize: 20, fontFamily: 'Text-Bold', fontWeight: 'bold'
               }}>
-                {subject.average ? formatAverage(subject.average) : 'N/A'}
+                {(subject.average !== undefined && subject.average !== null && !isNaN(subject.average)) ? formatAverage(subject.average) : 'N/A'}
                 <Text style={{ fontSize: 13, fontWeight: 'normal', color: averageColor }}>/20</Text>
                 {evolution && (
                   <Text style={{ fontSize: 16, color: evolution.color, marginLeft: 2 }}>
@@ -134,7 +131,7 @@ function EmbeddedSubjectCard({
         {showAppreciationView ? (
           <View style={{ marginTop: 15 }}>
             <Text style={{ color: theme.colors.onSurface || '#E2E8F0', fontSize: 14, fontFamily: 'Text-Regular', lineHeight: 20, fontStyle: 'italic' }}>
-              "{appreciationText}"
+              {appreciationText && appreciationText.trim().length > 0 ? `"${appreciationText}"` : "Aucune appréciation pour cette matière."}
             </Text>
           </View>
         ) : (
@@ -142,7 +139,7 @@ function EmbeddedSubjectCard({
             {subject.sortedMarks?.length > 0 ? (
               subject.sortedMarks.map((item) => {
                 const mark = getMark(item);
-                if (!mark) return null;
+                if (!mark || mark.value === undefined) return null; // Added robust check for mark value
                 const val = mark.value;
 
                 const markColor = !mark.isEffective ? '#64748B' : getDiffColor(val, subject.classAverage);
@@ -160,9 +157,9 @@ function EmbeddedSubjectCard({
                     borderColor: markColor + '60',
                   }}>
                     <Text style={{ color: markColor, fontSize: 13, fontWeight: 'bold' }}>
-                      {!mark.isEffective && mark.valueStr ? '(' : ''}
+                      {!mark.isEffective ? '(' : ''}
                       {formatAverage(val)}
-                      {!mark.isEffective && mark.valueStr ? ')' : ''}
+                      {!mark.isEffective ? ')' : ''}
                       <Text style={{ fontSize: 10 }}>/{mark.scale || 20}</Text>
                     </Text>
                   </View>

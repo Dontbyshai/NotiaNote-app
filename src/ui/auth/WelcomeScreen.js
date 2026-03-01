@@ -18,6 +18,7 @@ import {
     ActivityIndicator,
     Easing,
     KeyboardAvoidingView,
+    Modal, // Added Modal
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -25,29 +26,35 @@ import { Bug, Mail, ChevronRight, ArrowLeft, MoreHorizontal, Check, Circle, Eye,
 import EcoleDirecteApi from '../../services/EcoleDirecteApi';
 import AccountHandler from '../../core/AccountHandler';
 import { useGlobalAppContext } from '../../util/GlobalAppContext';
+import StorageHandler from '../../core/StorageHandler'; // Added StorageHandler
+
+import SchoolSearchModal from './SchoolSearchModal';
+import PronoteWebViewModal from './PronoteWebViewModal';
+import SkolengoWebViewModal from './SkolengoWebViewModal';
+import PronoteLoginModal from './PronoteLoginModal';
 
 
 const { width, height } = Dimensions.get('window');
 
 const SUB_CATEGORIES = {
     ent: [
-        { id: 'skolengo_ent', name: 'Skolengo', subtitle: 'ENT National', logo: require('../../../assets/logo-skolengo.png'), disabled: true },
+        { id: 'skolengo_ent', name: 'Skolengo', subtitle: 'ENT National', logo: require('../../../assets/logo-skolengo.png') },
     ],
     restauration: [
-        { id: 'turboself', name: 'TurboSelf', subtitle: 'Restauration scolaire', logo: require('../../../assets/logo-turboself.png'), disabled: true },
-        { id: 'alise', name: 'Alise', subtitle: 'Restauration scolaire', logo: require('../../../assets/logo-alise.jpg'), disabled: true },
-        { id: 'izly', name: 'Izly', subtitle: 'Paiement Crous', logo: require('../../../assets/logo-izly.png'), disabled: true },
-        { id: 'ard', name: 'ARD', subtitle: 'Gestion d\'accès', logo: require('../../../assets/logo-ard.png'), disabled: true },
+        { id: 'turboself', name: 'TurboSelf', subtitle: 'Restauration scolaire', logo: require('../../../assets/logo-turboself.png') },
+        { id: 'alise', name: 'Alise', subtitle: 'Restauration scolaire', logo: require('../../../assets/logo-alise.jpg') },
+        { id: 'izly', name: 'Izly', subtitle: 'Paiement Crous', logo: require('../../../assets/logo-izly.png') },
+        { id: 'ard', name: 'ARD', subtitle: 'Gestion d\'accès', logo: require('../../../assets/logo-ard.png') },
     ],
     universitaire: [
-        { id: 'uca', name: 'UCA', subtitle: "Univ. Côte d'Azur", logo: require('../../../assets/logo-uca.png'), disabled: true },
-        { id: 'sorbonne', name: 'Sorbonne', subtitle: 'Univ. Paris', logo: require('../../../assets/logo-sorbonne.png'), disabled: true },
-        { id: 'limoges', name: 'Limoges', subtitle: 'Univ. Limoges', logo: require('../../../assets/logo-limoges.png'), disabled: true },
-        { id: 'lorraine', name: 'Lorraine', subtitle: 'Univ. Lorraine', logo: require('../../../assets/logo-lorraine.png'), disabled: true },
-        { id: 'nimes', name: 'Nîmes', subtitle: 'Univ. Nîmes', logo: require('../../../assets/logo-nimes.png'), disabled: true },
-        { id: 'uphf', name: 'UPHF', subtitle: 'Hauts-de-France', logo: require('../../../assets/logo-uphf.png'), disabled: true },
-        { id: 'sciencepo', name: 'SciencePo', subtitle: 'IEP Paris', logo: require('../../../assets/logo-sciencepo.webp'), disabled: true },
-        { id: 'hec', name: 'HEC', subtitle: 'Éc. de Commerce', logo: require('../../../assets/logo-hec.webp'), disabled: true },
+        { id: 'uca', name: 'UCA', subtitle: "Univ. Côte d'Azur", logo: require('../../../assets/logo-uca.png'), appschoId: 'uca' },
+        { id: 'sorbonne', name: 'Sorbonne', subtitle: 'Univ. Paris', logo: require('../../../assets/logo-sorbonne.png'), appschoId: 'sorbonne' },
+        { id: 'limoges', name: 'Limoges', subtitle: 'Univ. Limoges', logo: require('../../../assets/logo-limoges.png'), appschoId: 'limoges' },
+        { id: 'lorraine', name: 'Lorraine', subtitle: 'Univ. Lorraine', logo: require('../../../assets/logo-lorraine.png'), multiUrl: 'https://mobile-back.univ-lorraine.fr' },
+        { id: 'nimes', name: 'Nîmes', subtitle: 'Univ. Nîmes', logo: require('../../../assets/logo-nimes.png'), multiUrl: 'https://mobile-back.unimes.fr' },
+        { id: 'uphf', name: 'UPHF', subtitle: 'Hauts-de-France', logo: require('../../../assets/logo-uphf.png'), multiUrl: 'https://appmob.uphf.fr/backend' },
+        { id: 'sciencepo', name: 'SciencePo', subtitle: 'IEP Paris', logo: require('../../../assets/logo-sciencepo.webp'), appschoId: 'sciencepo' },
+        { id: 'hec', name: 'HEC', subtitle: 'Éc. de Commerce', logo: require('../../../assets/logo-hec.webp'), appschoId: 'hec' },
     ]
 };
 
@@ -84,6 +91,12 @@ export default function WelcomeScreen({ navigation }) {
     const [tempToken, setTempToken] = useState('');
     const [twoFaTokenHeader, setTwoFaTokenHeader] = useState('');
 
+    // Modal States for WebView Flow
+    const [searchModalService, setSearchModalService] = useState(null);
+    const [showPronoteLoginModal, setShowPronoteLoginModal] = useState(false);
+    const [selectedSchool, setSelectedSchool] = useState(null);
+    const [webViewService, setWebViewService] = useState(null);
+
     const handleLogin = async () => {
         if (!username || !password) {
             Alert.alert("Erreur", "Veuillez entrer votre identifiant et mot de passe.");
@@ -94,7 +107,7 @@ export default function WelcomeScreen({ navigation }) {
         Keyboard.dismiss();
 
         // Utiliser AccountHandler
-        const status = await AccountHandler.login(username, password);
+        const status = await AccountHandler.login(username, password, selectedService, {});
 
         setIsLoading(false);
 
@@ -338,11 +351,14 @@ export default function WelcomeScreen({ navigation }) {
         }
 
         if (service === 'pronote') {
-            Alert.alert(
-                "Bientôt disponible",
-                "L'intégration Pronote est en cours de développement.\nElle sera disponible dans une prochaine mise à jour.",
-                [{ text: "Fermer", style: "cancel" }]
-            );
+            setShowConnectionOptions(false);
+            setShowPronoteLoginModal(true);
+            return;
+        }
+
+        if (service === 'skolengo_ent') {
+            setSearchModalService(service);
+            setShowConnectionOptions(false);
             return;
         }
 
@@ -611,9 +627,9 @@ export default function WelcomeScreen({ navigation }) {
                                     </TouchableOpacity>
 
                                     <TouchableOpacity
-                                        style={[styles.serviceCard, styles.disabledCard]}
-                                        activeOpacity={0.9}
-                                        onPress={() => Alert.alert("Bientôt disponible", "L'intégration Pronote est en cours de développement.")}
+                                        style={[styles.serviceCard, styles.cardActive]}
+                                        onPress={() => handleServiceSelect('pronote')}
+                                        activeOpacity={0.8}
                                     >
                                         <View style={styles.serviceIconContainer}>
                                             <View style={styles.logoContainerTransparent}>
@@ -626,17 +642,17 @@ export default function WelcomeScreen({ navigation }) {
                                         </View>
                                         <View style={styles.serviceInfo}>
                                             <Text style={styles.serviceName}>Pronote</Text>
-                                            <Text style={styles.serviceSubtitle}>Bientôt disponible</Text>
+                                            <Text style={styles.serviceSubtitle}>Élève ou Parent</Text>
                                         </View>
                                         <View style={styles.arrowContainer}>
-                                            <ChevronRight size={18} color="#6B7280" />
+                                            <ChevronRight size={18} color="#FFFFFF" opacity={0.5} />
                                         </View>
                                     </TouchableOpacity>
 
                                     <TouchableOpacity
-                                        style={[styles.serviceCard, styles.disabledCard]}
-                                        activeOpacity={0.9}
-                                        onPress={() => Alert.alert("Bientôt disponible", "L'intégration Skolengo est en cours de développement.")}
+                                        style={[styles.serviceCard, styles.cardActive]}
+                                        onPress={() => handleServiceSelect('skolengo_ent')}
+                                        activeOpacity={0.8}
                                     >
                                         <View style={styles.serviceIconContainer}>
                                             <View style={styles.logoContainerTransparent}>
@@ -649,15 +665,17 @@ export default function WelcomeScreen({ navigation }) {
                                         </View>
                                         <View style={styles.serviceInfo}>
                                             <Text style={styles.serviceName}>Skolengo</Text>
-                                            <Text style={styles.serviceSubtitle}>Bientôt disponible</Text>
+                                            <Text style={styles.serviceSubtitle}>ENT National</Text>
                                         </View>
-                                        <ChevronRight size={18} color="#6B7280" />
+                                        <View style={styles.arrowContainer}>
+                                            <ChevronRight size={18} color="#FFFFFF" opacity={0.5} />
+                                        </View>
                                     </TouchableOpacity>
 
                                     <TouchableOpacity
-                                        style={[styles.serviceCard, styles.cardActive]}
-                                        activeOpacity={0.8}
-                                        onPress={() => handleServiceSelect('ent')}
+                                        style={[styles.serviceCard, { opacity: 0.6 }]}
+                                        activeOpacity={0.9}
+                                        onPress={() => Alert.alert("Bientôt disponible", "Les Espaces Numériques seront très bientôt disponibles sur NotiaNote !")}
                                     >
                                         <View style={styles.serviceIconContainer}>
                                             <View style={[styles.logoContainerTransparent, { backgroundColor: 'transparent', borderRadius: 12, justifyContent: 'center', alignItems: 'center' }]}>
@@ -666,15 +684,15 @@ export default function WelcomeScreen({ navigation }) {
                                         </View>
                                         <View style={styles.serviceInfo}>
                                             <Text style={styles.serviceName}>Espaces Numériques (ENT)</Text>
-                                            <Text style={styles.serviceSubtitle}>Skolengo et autres...</Text>
+                                            <Text style={styles.serviceSubtitle}>Bientôt disponible</Text>
                                         </View>
                                         <ChevronRight size={18} color="#6B7280" />
                                     </TouchableOpacity>
 
                                     <TouchableOpacity
-                                        style={[styles.serviceCard, styles.cardActive]}
-                                        activeOpacity={0.8}
-                                        onPress={() => handleServiceSelect('restauration')}
+                                        style={[styles.serviceCard, { opacity: 0.6 }]}
+                                        activeOpacity={0.9}
+                                        onPress={() => Alert.alert("Bientôt disponible", "La Restauration Scolaire sera très bientôt disponible sur NotiaNote !")}
                                     >
                                         <View style={styles.serviceIconContainer}>
                                             <View style={[styles.logoContainerTransparent, { backgroundColor: 'transparent', borderRadius: 12, justifyContent: 'center', alignItems: 'center' }]}>
@@ -683,15 +701,15 @@ export default function WelcomeScreen({ navigation }) {
                                         </View>
                                         <View style={styles.serviceInfo}>
                                             <Text style={styles.serviceName}>Restauration scolaire</Text>
-                                            <Text style={styles.serviceSubtitle}>TurboSelf, Alise, Izly...</Text>
+                                            <Text style={styles.serviceSubtitle}>Bientôt disponible</Text>
                                         </View>
                                         <ChevronRight size={18} color="#6B7280" />
                                     </TouchableOpacity>
 
                                     <TouchableOpacity
-                                        style={[styles.serviceCard, styles.cardActive]}
-                                        activeOpacity={0.8}
-                                        onPress={() => handleServiceSelect('universitaire')}
+                                        style={[styles.serviceCard, { opacity: 0.6 }]}
+                                        activeOpacity={0.9}
+                                        onPress={() => Alert.alert("Bientôt disponible", "Les Services Universitaires seront très bientôt disponibles sur NotiaNote !")}
                                     >
                                         <View style={styles.serviceIconContainer}>
                                             <View style={[styles.logoContainerTransparent, { backgroundColor: 'transparent', borderRadius: 12, justifyContent: 'center', alignItems: 'center' }]}>
@@ -700,7 +718,7 @@ export default function WelcomeScreen({ navigation }) {
                                         </View>
                                         <View style={styles.serviceInfo}>
                                             <Text style={styles.serviceName}>Services Universitaires</Text>
-                                            <Text style={styles.serviceSubtitle}>Sorbonne, Limoges, Lorraine...</Text>
+                                            <Text style={styles.serviceSubtitle}>Bientôt disponible</Text>
                                         </View>
                                         <ChevronRight size={18} color="#6B7280" />
                                     </TouchableOpacity>
@@ -898,6 +916,60 @@ export default function WelcomeScreen({ navigation }) {
                     </Animated.View>
                 )
             }
+
+            {/* Pronote Login Modal (4-method selection) */}
+            <Modal visible={showPronoteLoginModal} animationType="slide" transparent={true}>
+                {showPronoteLoginModal && (
+                    <PronoteLoginModal
+                        onClose={() => {
+                            setShowPronoteLoginModal(false);
+                            setShowConnectionOptions(true);
+                        }}
+                        onSuccess={() => {
+                            setShowPronoteLoginModal(false);
+                            setIsLoggedIn(true);
+                        }}
+                    />
+                )}
+            </Modal>
+
+            {/* School Search Modal — for Skolengo */}
+            <Modal visible={!!searchModalService} animationType="slide" transparent={true}>
+                {searchModalService && (
+                    <SchoolSearchModal
+                        service={searchModalService}
+                        onClose={() => {
+                            setSearchModalService(null);
+                            setShowConnectionOptions(true);
+                        }}
+                        onSelect={(school) => {
+                            setSelectedSchool(school);
+                            setWebViewService(searchModalService);
+                            setSearchModalService(null);
+                        }}
+                    />
+                )}
+            </Modal>
+
+
+            {/* Skolengo WebView Modal */}
+            <Modal visible={webViewService === 'skolengo_ent' && !!selectedSchool} animationType="slide" transparent={false}>
+                {webViewService === 'skolengo_ent' && selectedSchool && (
+                    <SkolengoWebViewModal
+                        schoolData={selectedSchool}
+                        onClose={() => {
+                            setWebViewService(null);
+                            setSelectedSchool(null);
+                            setShowConnectionOptions(true);
+                        }}
+                        onSuccess={() => {
+                            setWebViewService(null);
+                            setSelectedSchool(null);
+                            navigation.replace('MainTabs');
+                        }}
+                    />
+                )}
+            </Modal>
 
 
             {/* 2FA Modal */}

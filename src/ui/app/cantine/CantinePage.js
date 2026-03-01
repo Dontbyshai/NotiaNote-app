@@ -1,17 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, ActivityIndicator, TouchableOpacity, ScrollView, Modal, Button, Alert, Image, Platform, TextInput } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, ActivityIndicator, TouchableOpacity, ScrollView, Modal, Button, Alert, Image, Platform, TextInput, Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import QRCode from 'react-native-qrcode-svg';
 import Code39Barcode from '../../components/Code39Barcode';
 import Code128Barcode from '../../components/Code128Barcode';
-import { ChevronLeft, Info, Settings, Camera as CameraIcon, X, Hash, Save } from 'lucide-react-native';
+import { ChevronLeft, Info, Settings, Camera as CameraIcon, X, Hash, Save, Wallet } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useCameraPermissions, CameraView } from 'expo-camera';
 import { useGlobalAppContext } from '../../../util/GlobalAppContext';
 import AccountHandler from '../../../core/AccountHandler';
 import { useCurrentAccountContext } from '../../../util/CurrentAccountContext';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import CustomProfilePhoto from '../../components/CustomProfilePhoto';
 import BannerAdComponent from '../../components/Ads/BannerAdComponent';
 import CustomTextInput from '../../components/CustomTextInput';
@@ -181,6 +183,58 @@ export default function CantinePage() {
 
     const activeCode = manualOverride || barcodeNumber;
 
+    const [downloadingPass, setDownloadingPass] = useState(false);
+
+    const generateAppleWalletPass = async () => {
+        if (!activeCode) {
+            Alert.alert("Erreur", "Aucun code barre à ajouter à la carte.");
+            return;
+        }
+
+        try {
+            setDownloadingPass(true);
+
+            // Your Node.js backend URL (localhost for simulator)
+            // If you test on a real device on same WiFi, use your computer's local IP (e.g., http://192.168.1.X:3000)
+            // Map the app's format state to the backend's expected format param
+            const formatMap = {
+                'QR': 'qr',
+                'CODE128': 'code128',
+                'CODE39': 'code128', // Apple Wallet doesn't support Code39 → encode as Code128 (same charset, scanners will read it)
+                'PDF417': 'pdf417',
+                'AZTEC': 'aztec',
+            };
+            const barcodeFormat = formatMap[format] || 'qr'; // default to QR
+
+            const queryParams = new URLSearchParams({
+                firstName: user?.firstName || user?.prenom || '',
+                lastName: user?.lastName || user?.nom || '',
+                barcodeNumber: activeCode,
+                className: user?.profile?.classe?.libelle || user?.classe?.libelle || "",
+                schoolName: user?.nomEtablissement || user?.etablissement?.nom || user?.school || "",
+                barcodeFormat, // 🆕 Pass the format detected from the physical badge scan
+            }).toString();
+
+            const backendUrl = `https://notifs.notianote.fr/api/generate-pass?${queryParams}`;
+
+            console.log("Opening pass URL perfectly via Safari tunnel:", backendUrl);
+
+            try {
+                // Sur iOS, Safari va s'ouvrir sur ce lien tunnel. Comme il est en HTTPS, sans publicité,
+                // sans avertissement IP et en "inline", Safari déclenche instantanément la popup Wallet!
+                await Linking.openURL(backendUrl);
+            } catch (err) {
+                console.error("Could not open Wallet:", err);
+                Alert.alert('Erreur', 'Impossible d\'ouvrir Apple Cartes.');
+            }
+        } catch (error) {
+            console.error("Wallet error:", error);
+            Alert.alert("Erreur", "Le serveur de génération de carte n'a pas pu être contacté.");
+        } finally {
+            setDownloadingPass(false);
+        }
+    };
+
     // Helper to render code
     const renderCode = () => {
         if (!activeCode) return <Text style={styles.errorText}>Pas de code</Text>;
@@ -224,18 +278,7 @@ export default function CantinePage() {
     };
 
     if (showCamera) {
-        if (!permission) return <View style={{ flex: 1, backgroundColor: 'black' }} />;
-        if (!permission.granted) {
-            return (
-                <View style={styles.centerContainer}>
-                    <Text style={{ color: 'white', marginBottom: 20, fontSize: 16 }}>Permission caméra requise pour scanner</Text>
-                    <Button onPress={requestPermission} title="Autoriser la caméra" color={theme.colors.primary} />
-                    <TouchableOpacity onPress={() => setShowCamera(false)} style={{ marginTop: 20 }}>
-                        <Text style={{ color: 'red' }}>Annuler</Text>
-                    </TouchableOpacity>
-                </View>
-            );
-        }
+        if (!permission || !permission.granted) return <View style={{ flex: 1, backgroundColor: 'black' }} />;
         return (
             <View style={{ flex: 1, backgroundColor: 'black' }}>
                 <CameraView
@@ -345,6 +388,24 @@ export default function CantinePage() {
                     </View>
                 )}
 
+                {/* Apple Wallet Badge - iOS only */}
+                {activeCode && Platform.OS === 'ios' && (
+                    <TouchableOpacity
+                        style={[styles.appleWalletBadgeWrapper, downloadingPass && { opacity: 0.5 }]}
+                        onPress={generateAppleWalletPass}
+                        disabled={downloadingPass}
+                    >
+                        {downloadingPass ? (
+                            <ActivityIndicator color="white" size="small" style={{ backgroundColor: '#000', padding: 10, borderRadius: 8, width: 170, height: 50, justifyContent: 'center' }} />
+                        ) : (
+                            <Image
+                                source={require('../../../../assets/apple_wallet.png')}
+                                style={{ width: 170, height: 50, resizeMode: 'contain' }}
+                            />
+                        )}
+                    </TouchableOpacity>
+                )}
+
                 {/* Banner Ad at bottom */}
                 <BannerAdComponent placement="cantine" />
             </ScrollView>
@@ -420,7 +481,19 @@ export default function CantinePage() {
                         <Text style={styles.sectionTitle}>Scanner Carte Physique</Text>
                         <TouchableOpacity
                             style={[styles.actionButton, { backgroundColor: theme.colors.primary }]}
-                            onPress={() => { setShowSettings(false); setScanned(false); setShowCamera(true); }}
+                            onPress={async () => {
+                                setShowSettings(false);
+                                setScanned(false);
+                                if (!permission?.granted) {
+                                    const res = await requestPermission();
+                                    if (res.granted) {
+                                        setShowCamera(true);
+                                    }
+                                    // Apple Review Fix: Do not redirect or prompt user to go to Settings if they deny.
+                                } else {
+                                    setShowCamera(true);
+                                }
+                            }}
                         >
                             <CameraIcon color={theme.colors.primary === '#FAFAFA' ? "black" : "white"} size={20} style={{ marginRight: 10 }} />
                             <Text style={[styles.actionButtonText, theme.colors.primary === '#FAFAFA' && { color: 'black' }]}>Utiliser la caméra</Text>
@@ -468,9 +541,12 @@ const styles = StyleSheet.create({
     errorText: { color: '#94A3B8', textAlign: 'center', marginTop: 5 },
     scanButton: { marginTop: 20, backgroundColor: '#8B5CF6', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12 },
     scanButtonText: { color: 'white', fontWeight: 'bold' },
-    instructions: { width: '100%', padding: 20, borderRadius: 16, borderWidth: 1 },
+    instructions: { width: '100%', padding: 20, borderRadius: 16, borderWidth: 1, marginBottom: 20 },
     instructionTitle: { color: '#8B5CF6', fontSize: 16, fontWeight: 'bold', marginBottom: 5 },
     instructionText: { color: '#CBD5E1', lineHeight: 20 },
+
+    // Apple Wallet Badge Styles
+    appleWalletBadgeWrapper: { alignSelf: 'center', marginBottom: 25 },
 
     // Modal
     modalWrapper: { flex: 1, justifyContent: 'flex-end' },

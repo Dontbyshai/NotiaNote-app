@@ -40,4 +40,6 @@ class TimetableHandler {
     }
 }
 
+TimetableHandler.default = TimetableHandler;
 export default TimetableHandler;
+

@@ -117,17 +117,49 @@ export default function MessageDetailsPage() {
         if (downloading) return;
         setDownloading(true);
         try {
-            console.log("Starting download via API Service...");
-            // Fix: Use FICHIER_CDT instead of MESSAGE_PIECE_JOINTE
-            // MESSAGE_PIECE_JOINTE is not recognized by the download endpoint, causing 520 errors
-            const base64data = await EcoleDirecteApi.downloadAttachment(file.id, "FICHIER_CDT");
+            console.log("[Download] Starting for file:", file.id, file.libelle);
+            let base64data = null;
+            let targetFile = null; // declared here so Strategy 2 can read its .type
 
-            // Check for HTML Error Page (Redirect) inside Base64
-            if (base64data && base64data.length < 5000) {
+            // Strategy 1: Get file content directly from getMessageContent
+            // (This uses the already-working auth bridge and bypasses telechargement.awp)
+            try {
+                const msgResponse = await EcoleDirecteApi.getMessageContent(accountID, message.id);
+                if (msgResponse?.data?.data) {
+                    const messageData = msgResponse.data.data;
+                    // EcoleDirecte can return files as 'files', 'fichiers', or inside content
+                    const filesInMessage = messageData.files || messageData.fichiers || [];
+                    console.log("[Download] Files in message content:", filesInMessage.length, "| IDs:", filesInMessage.map(f => f.id));
+                    targetFile = filesInMessage.find(f => String(f.id) === String(file.id));
+                    if (targetFile?.content) {
+                        console.log("[Download] Found base64 in message content!");
+                        base64data = targetFile.content;
+                    } else {
+                        console.log("[Download] File object keys:", targetFile ? Object.keys(targetFile) : "not found");
+                    }
+                }
+            } catch (e) {
+                console.warn("[Download] getMessageContent failed:", e.message);
+            }
+
+            // Strategy 2: Fallback to downloadAttachment if file not in message content
+            if (!base64data) {
+                // Use the actual file type returned by EcoleDirecte (e.g. PIECE_JOINTE)
+                const fileType = targetFile?.type || file?.type || "PIECE_JOINTE";
+                console.log("[Download] File not in content, trying downloadAttachment API with type:", fileType);
+                base64data = await EcoleDirecteApi.downloadAttachment(file.id, fileType, false, String(accountID || ""));
+            }
+
+            if (!base64data) {
+                throw new Error("Aucune donnée reçue.");
+            }
+
+            // Check for HTML Error Page inside Base64
+            if (base64data.length < 5000) {
                 try {
                     const text = Buffer.from(base64data, 'base64').toString('utf-8');
                     if (text.includes('<html') || text.includes('Login') || text.includes('"code":')) {
-                        console.log("Downloaded content looks like error/html:", text.substring(0, 100));
+                        console.log("[Download] Content looks like error/html:", text.substring(0, 100));
                         Alert.alert("Erreur Fichier", "Le fichier téléchargé est invalide (Page Erreur/Login).");
                         setDownloading(false);
                         return;
@@ -135,17 +167,13 @@ export default function MessageDetailsPage() {
                 } catch (e) { /* ignore decode error */ }
             }
 
-            if (!base64data) {
-                throw new Error("Aucune donnée reçue.");
-            }
-
             const safeName = (file.libelle || file.name || `doc_${file.id}`).replace(/[^a-zA-Z0-9.\-_]/g, '_');
             const path = `${FileSystem.documentDirectory}${safeName}`;
 
-            console.log("Writing file to:", path);
+            console.log("[Download] Writing file to:", path);
             await FileSystem.writeAsStringAsync(path, base64data, { encoding: FileSystem.EncodingType.Base64 });
 
-            console.log("Opening file viewer/share...");
+            console.log("[Download] Opening share sheet...");
 
             if (Sharing && await Sharing.isAvailableAsync()) {
                 await Sharing.shareAsync(path);
@@ -239,9 +267,9 @@ export default function MessageDetailsPage() {
 
             <View style={[styles.header, { paddingTop: insets.top + 5 }]}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconButton}>
-                    <ChevronLeft color="#FFF" size={28} />
+                    <ChevronLeft color={theme.colors.onBackground} size={28} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle} numberOfLines={1}>Détail Message</Text>
+                <Text style={[styles.headerTitle, { color: theme.colors.onBackground }]} numberOfLines={1}>Détail Message</Text>
                 <TouchableOpacity onPress={openMoveModal} style={[styles.iconButton, { backgroundColor: theme.colors.primary + '33' }]}>
                     <FolderInput color={theme.colors.primary} size={20} />
                 </TouchableOpacity>
@@ -249,13 +277,13 @@ export default function MessageDetailsPage() {
 
             <ScrollView contentContainerStyle={styles.content}>
                 <View style={styles.metaCard}>
-                    <Text style={styles.subject}>{subject}</Text>
+                    <Text style={[styles.subject, { color: theme.colors.onBackground }]}>{subject}</Text>
                     <View style={styles.senderRow}>
                         <View style={[styles.avatar, { backgroundColor: theme.colors.primary }]}>
                             <Text style={styles.avatarText}>{sender.charAt(0).toUpperCase()}</Text>
                         </View>
                         <View>
-                            <Text style={styles.senderName}>{sender}</Text>
+                            <Text style={[styles.senderName, { color: theme.colors.onSurface || theme.colors.onBackground }]}>{sender}</Text>
                             <Text style={styles.date}>{formatDate(message.date)}</Text>
                         </View>
                     </View>
@@ -265,7 +293,7 @@ export default function MessageDetailsPage() {
                     {loading ? (
                         <ActivityIndicator color={theme.colors.primary} />
                     ) : (
-                        <LinkifiedText text={content || "Aucun contenu."} style={styles.bodyText} theme={theme} />
+                        <LinkifiedText text={content || "Aucun contenu."} style={[styles.bodyText, { color: theme.colors.onBackground }]} theme={theme} />
                     )}
                 </View>
 
@@ -280,11 +308,11 @@ export default function MessageDetailsPage() {
                                     {downloading ? (
                                         <ActivityIndicator color={theme.colors.primary} size="small" />
                                     ) : (
-                                        <Paperclip color="#FFF" size={20} />
+                                        <Paperclip color={theme.colors.onBackground} size={20} />
                                     )}
                                 </View>
                                 <View style={{ flex: 1 }}>
-                                    <Text style={styles.attachmentName} numberOfLines={1}>{file.libelle || file.name || "Fichier sans nom"}</Text>
+                                    <Text style={[styles.attachmentName, { color: theme.colors.onBackground }]} numberOfLines={1}>{file.libelle || file.name || "Fichier sans nom"}</Text>
                                     <Text style={{ color: '#64748B', fontSize: 10 }}>{file.id || "ID Manquant"}</Text>
                                 </View>
                                 <Download color="#94A3B8" size={20} />
@@ -310,7 +338,7 @@ export default function MessageDetailsPage() {
                 <BlurView intensity={20} tint="dark" style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Déplacer vers un dossier</Text>
+                            <Text style={[styles.modalTitle, { color: theme.colors.onBackground }]}>Déplacer vers un dossier</Text>
                             <TouchableOpacity onPress={() => setModalVisible(false)}>
                                 <X color="#94A3B8" size={24} />
                             </TouchableOpacity>
@@ -338,7 +366,7 @@ export default function MessageDetailsPage() {
                                             <View style={styles.folderIcon}>
                                                 {item.id === 0 ? <FolderOpen color="#3B82F6" size={20} /> : <Folder color="#F59E0B" size={20} />}
                                             </View>
-                                            <Text style={styles.folderName}>{item.libelle}</Text>
+                                            <Text style={[styles.folderName, { color: theme.colors.onBackground }]}>{item.libelle}</Text>
                                         </TouchableOpacity>
 
                                         {item.id > 0 && (

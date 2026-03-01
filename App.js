@@ -36,6 +36,7 @@ registerBackgroundFetchAsync();
 
 // Main app
 function App() {
+  console.log("[App] Rendering root component...");
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AppRoot />

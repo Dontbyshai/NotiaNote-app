@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import useState from "react-usestateref";
 import { StatusBar, useColorScheme, View, ActivityIndicator, Text, Platform, AppState } from "react-native";
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -161,7 +161,7 @@ function AppRoot() {
       if (nextAppState === 'active') {
         console.log('[AppRoot] App became active, refreshing session...');
         try {
-          await UltimateLoginEngine.backgroundReLogin();
+          await UltimateLoginEngine.reLoginOnly();
           console.log('[AppRoot] Session refreshed successfully');
         } catch (error) {
           console.warn('[AppRoot] Token refresh failed:', error);
@@ -241,42 +241,44 @@ function GlobalStack({ cameFromAuthStack, setCameFromAuthStack, isLocked, setIsL
     return <BiometricLock theme={theme} onUnlock={() => setIsLocked(false)} />;
   }
 
+  // NavigationContainer ref — used to call navigate() outside React context (openDoubleAuthPopup)
+  const navigationRef = useRef(null);
+
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer
+      ref={navigationRef}
+      theme={navTheme}
+      onReady={() => {
+        // Register the opener once the navigator is fully mounted
+        AccountHandler.openDoubleAuthPopup = () => navigationRef.current?.navigate("DoubleAuthPopup");
+        if (AccountHandler.wantToOpenDoubleAuthPopup) {
+          AccountHandler.openDoubleAuthPopup();
+          AccountHandler.wantToOpenDoubleAuthPopup = false;
+        }
+      }}
+    >
       <StatusBar
         translucent={true}
         backgroundColor="transparent"
         barStyle={theme.dark ? "light-content" : "dark-content"}
       />
-      <NavigationReadyHandler />
-      <Stack.Navigator>
-        <Stack.Screen
-          name="GlobalStack"
-          options={{ headerShown: false }}
-          initialParams={{ needToRefresh: false }}
-        >
-          {(props) => isLoggedIn ? (
-            <AppStack cameFromAuthStack={cameFromAuthStack} {...props} />
-          ) : (
-            <AuthStack setCameFromAuthStack={setCameFromAuthStack} {...props} />
-          )}
-        </Stack.Screen>
+      {/* Use separate screens for Auth vs App — React Navigation's recommended auth flow pattern */}
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {isLoggedIn ? (
+          <Stack.Screen
+            name="App"
+            initialParams={{ needToRefresh: false }}
+          >
+            {(props) => <AppStack cameFromAuthStack={cameFromAuthStack} {...props} />}
+          </Stack.Screen>
+        ) : (
+          <Stack.Screen name="Auth">
+            {(props) => <AuthStack setCameFromAuthStack={setCameFromAuthStack} {...props} />}
+          </Stack.Screen>
+        )}
       </Stack.Navigator>
     </NavigationContainer>
   );
-}
-
-// Helper to handle navigation-dependent logic once container is ready
-function NavigationReadyHandler() {
-  const navigation = useNavigation();
-  useEffect(() => {
-    AccountHandler.openDoubleAuthPopup = () => navigation.navigate("DoubleAuthPopup");
-    if (AccountHandler.wantToOpenDoubleAuthPopup) {
-      AccountHandler.openDoubleAuthPopup();
-      AccountHandler.wantToOpenDoubleAuthPopup = false;
-    }
-  }, []);
-  return null;
 }
 
 export default AppRoot;

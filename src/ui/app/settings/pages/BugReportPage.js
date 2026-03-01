@@ -150,7 +150,7 @@ function BugReportPage({ navigation, route }) {
         borderWidth: 1, borderColor: selectedBugType === typeId ? theme.colors.primary : (theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)')
       }}
     >
-      <Text style={{ color: selectedBugType === typeId ? '#FFF' : (theme.dark ? '#94A3B8' : '#64748B'), fontWeight: 'bold' }}>{title}</Text>
+      <Text style={{ color: selectedBugType === typeId ? theme.colors.onPrimary : (theme.dark ? '#94A3B8' : '#64748B'), fontWeight: 'bold' }}>{title}</Text>
     </TouchableOpacity>
   );
 
@@ -218,7 +218,7 @@ function BugReportPage({ navigation, route }) {
               <Text style={[styles.label, { color: theme.dark ? '#94A3B8' : '#64748B' }]}>{isSuggestionMode ? "VOTRE IDÉE" : "DÉTAILS"}</Text>
               <View style={[styles.inputContainer, { backgroundColor: theme.dark ? 'rgba(15, 23, 42, 0.4)' : '#FFFFFF', borderColor: theme.dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
                 <TextInput
-                  style={{ color: theme.dark ? '#FFF' : theme.colors.onBackground, fontSize: 16, textAlignVertical: 'top', height: 120 }}
+                  style={{ color: theme.colors.onSurface, fontSize: 16, textAlignVertical: 'top', height: 120 }}
                   multiline
                   placeholder={isSuggestionMode ? "Je pense qu'il faudrait ajouter..." : "Décrivez le problème..."}
                   placeholderTextColor="#64748B"
@@ -244,12 +244,12 @@ function BugReportPage({ navigation, route }) {
                   shadowOpacity: 0.3, shadowRadius: 10, shadowOffset: { height: 4, width: 0 }
                 }}
               >
-                {isSendingBugReport ? <ActivityIndicator color="#FFF" style={{ marginRight: 10 }} /> : (
+                {isSendingBugReport ? <ActivityIndicator color={theme.colors.onPrimary} style={{ marginRight: 10 }} /> : (
                   <>
                     {!(selectedBugType === 'other' ? sentSuggestion : sentBugReport) && !errorWhileSendingBugReport && (
-                      <Send size={20} color="#FFF" style={{ marginRight: 10 }} />
+                      <Send size={20} color={theme.colors.onPrimary} style={{ marginRight: 10 }} />
                     )}
-                    <Text style={{ color: '#FFF', fontSize: 16, fontWeight: 'bold' }}>
+                    <Text style={{ color: theme.colors.onPrimary, fontSize: 16, fontWeight: 'bold' }}>
                       {(selectedBugType === 'other' ? sentSuggestion : sentBugReport)
                         ? (isSuggestionMode ? "Merci pour l'idée !" : "Merci de votre aide !")
                         : errorWhileSendingBugReport ? "Erreur" : (isSuggestionMode ? "Envoyer ma suggestion" : "Envoyer le signalement")}

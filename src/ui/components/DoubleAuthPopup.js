@@ -93,7 +93,9 @@ function DoubleAuthPopup({ navigation }) {
         HapticsHandler.vibrate("light");
 
         if (reloginStatus == 1) {
-          navigation.pop();
+          // Do NOT call navigation.pop() here — setIsLoggedIn(true) will unmount AuthStack
+          // entirely (including this popup), so calling pop() first creates two simultaneous
+          // navigation state mutations that corrupt React Navigation's StackRouter state.
           setIsLoggedIn(true);
         } else if (reloginStatus == 2) {
           navigation.navigate("ChooseAccountPage");

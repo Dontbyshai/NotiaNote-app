@@ -20,6 +20,7 @@ import { useGlobalAppContext } from '../../../util/GlobalAppContext';
 import StorageHandler from '../../../core/StorageHandler';
 import AccountHandler from '../../../core/AccountHandler';
 import ColorsHandler from '../../../core/ColorsHandler';
+import MarksHandler from '../../../core/MarksHandler';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android') {
@@ -80,6 +81,13 @@ export default function OnboardingColorsPage({ navigation }) {
                 await new Promise(r => setTimeout(r, 1000));
                 marksData = await StorageHandler.getData("marks");
                 retryCount++;
+            }
+
+            // If still missing, trigger a manual fetch
+            if (!marksData || !marksData[account.id]) {
+                console.log("[OnboardingColors] Marks still missing after wait, triggering fetch...");
+                await MarksHandler.getMarks(account.id);
+                marksData = await StorageHandler.getData("marks");
             }
 
             if (marksData && marksData[account.id] && marksData[account.id].data) {
@@ -153,7 +161,7 @@ export default function OnboardingColorsPage({ navigation }) {
                 end={{ x: 1, y: 1 }}
             />
 
-            <View style={[styles.content, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }]}>
+            <View style={[styles.content, { paddingTop: insets.top + 45, paddingBottom: insets.bottom + 20 }]}>
                 <Animated.View style={{ flex: 1, opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
                     <View style={styles.header}>
                         <View style={[styles.iconContainer, { backgroundColor: itemBackgroundColor, borderColor: itemBorderColor }]}>

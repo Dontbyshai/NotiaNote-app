@@ -15,13 +15,13 @@ const AD_UNIT_IDS = Platform.select({
         schoollife: 'ca-app-pub-5759305174337781/7731565916',
     },
     android: {
-        home: 'ca-app-pub-xxxxxxxxxxxxxxxx/xxxxxxxxxx', // TO REPLACE
+        home: 'ca-app-pub-5759305174337781/4472304803',
         cantine: 'ca-app-pub-xxxxxxxxxxxxxxxx/xxxxxxxxxx', // TO REPLACE
-        homework: 'ca-app-pub-xxxxxxxxxxxxxxxx/xxxxxxxxxx', // TO REPLACE
+        homework: 'ca-app-pub-5759305174337781/1592652613',
         homework_detail: 'ca-app-pub-xxxxxxxxxxxxxxxx/xxxxxxxxxx', // TO REPLACE
-        timetable: 'ca-app-pub-xxxxxxxxxxxxxxxx/xxxxxxxxxx', // TO REPLACE
+        timetable: 'ca-app-pub-5759305174337781/8197771746',
         messages: 'ca-app-pub-xxxxxxxxxxxxxxxx/xxxxxxxxxx', // TO REPLACE
-        marks: 'ca-app-pub-xxxxxxxxxxxxxxxx/xxxxxxxxxx', // TO REPLACE
+        marks: 'ca-app-pub-5759305174337781/7041797587',
         schoollife: 'ca-app-pub-xxxxxxxxxxxxxxxx/xxxxxxxxxx', // TO REPLACE
     }
 });

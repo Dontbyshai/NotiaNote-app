@@ -1,6 +1,4 @@
-import { useEffect } from 'react';
-import { Platform } from 'react-native';
-import useState from 'react-usestateref';
+import { useEffect, useState, useRef } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import MainStack from './MainStack';
@@ -12,7 +10,7 @@ import HomeworkHandler from '../../core/HomeworkHandler';
 import HapticsHandler from '../../core/HapticsHandler';
 import { CurrentAccountContextProvider } from '../../util/CurrentAccountContext';
 import { AppStackContextProvider, useAppStackContext } from '../../util/AppStackContext';
-import { useNavigation } from '@react-navigation/native';
+
 import StorageHandler from '../../core/StorageHandler';
 
 
@@ -47,7 +45,6 @@ function AppStack({ route, cameFromAuthStack }) {
 
 function MainAndSettingsStack({ cameFromAuthStack }) {
   const { refreshLogin, isConnected, isConnecting, updateGlobalDisplay } = useAppStackContext();
-  const navigation = useNavigation();
 
   // Onboarding Logic
   const [isOnboardingChecked, setIsOnboardingChecked] = useState(false);
@@ -101,36 +98,36 @@ function MainAndSettingsStack({ cameFromAuthStack }) {
     setup();
   }, [mainAccount.id]); // specifically watch mainAccount.id
 
-  // Marks
-  const [_gotMarksForID, _setGotMarksForID, gotMarksForIDRef] = useState({});
-  const [_gettingMarksForID, setGettingMarksForID, gettingMarksForIDRef] = useState({});
-  const [_errorGettingMarksForID, _setErrorGettingMarksForID, errorGettingMarksForIDRef] = useState({});
+  // Marks — pure refs for tracking (never displayed directly, only used as guards)
+  const gotMarksForIDRef = useRef({});
+  const gettingMarksForIDRef = useRef({});
+  const errorGettingMarksForIDRef = useRef({});
 
-  // Homework
-  const [_gotHomeworkForID, _setGotHomeworkForID, gotHomeworkForIDRef] = useState({});
-  const [_gettingHomeworkForID, setGettingHomeworkForID, gettingHomeworkForIDRef] = useState({});
-  const [_errorGettingHomeworkForID, _setErrorGettingHomeworkForID, errorGettingHomeworkForIDRef] = useState({});
+  // Homework — same pattern
+  const gotHomeworkForIDRef = useRef({});
+  const gettingHomeworkForIDRef = useRef({});
+  const errorGettingHomeworkForIDRef = useRef({});
 
   // Auto-get marks and homework for each connected account
   async function getMarks(accountID, manualRefreshing) {
     if (gotMarksForIDRef.current[accountID] && !manualRefreshing) { return; }
     if (gettingMarksForIDRef.current[accountID]) { return; }
 
-    setGettingMarksForID({ ...gettingMarksForIDRef.current, [accountID]: true });
+    gettingMarksForIDRef.current = { ...gettingMarksForIDRef.current, [accountID]: true };
     const status = await MarksHandler.getMarks(accountID);
     gotMarksForIDRef.current[accountID] = status == 1;
     errorGettingMarksForIDRef.current[accountID] = status != 1;
-    setGettingMarksForID({ ...gettingMarksForIDRef.current, [accountID]: false });
+    gettingMarksForIDRef.current = { ...gettingMarksForIDRef.current, [accountID]: false };
   }
   async function getHomework(accountID, manualRefreshing) {
     if (gotHomeworkForIDRef.current[accountID] && !manualRefreshing) { return; }
     if (gettingHomeworkForIDRef.current[accountID]) { return; }
 
-    setGettingHomeworkForID({ ...gettingHomeworkForIDRef.current, [accountID]: true });
+    gettingHomeworkForIDRef.current = { ...gettingHomeworkForIDRef.current, [accountID]: true };
     const status = await HomeworkHandler.getAllHomework(accountID);
     gotHomeworkForIDRef.current[accountID] = status == 1;
     errorGettingHomeworkForIDRef.current[accountID] = status != 1;
-    setGettingHomeworkForID({ ...gettingHomeworkForIDRef.current, [accountID]: false });
+    gettingHomeworkForIDRef.current = { ...gettingHomeworkForIDRef.current, [accountID]: false };
   }
   useEffect(() => {
     async function autoGetMarks() {

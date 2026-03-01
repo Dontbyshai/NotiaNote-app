@@ -2,7 +2,8 @@ import { View, Text, ScrollView, TouchableOpacity, RefreshControl, Dimensions, A
 import { LinearGradient as ExpoLinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BarChart3, BookOpen, Calendar, Mail, Clock, ChevronRight, TrendingUp, TrendingDown, RefreshCw, Utensils } from 'lucide-react-native';
+import { BarChart, BookOpen, Calendar, Mail, Clock, ChevronRight, TrendingUp, TrendingDown, RefreshCw, Utensils } from 'lucide-react-native';
+
 import { useState, useEffect, useRef } from 'react';
 
 import CustomProfilePhoto from '../../components/CustomProfilePhoto';
@@ -26,10 +27,84 @@ import BannerAdComponent from '../../components/Ads/BannerAdComponent';
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width - 40;
 
+// --- Sub-components (Moved outside for performance & stability) ---
+
+const MiniLineChart = ({ data, width, height, color = "#a78bfa" }) => {
+    if (!data || data.length < 2) return null;
+    const validData = data.filter(d => d.value !== undefined).map(d => d.value);
+    if (validData.length < 2) return null;
+    const maxData = Math.max(...validData);
+    const minData = Math.min(...validData);
+    const padding = (maxData - minData) * 0.2 || 0.5;
+    const max = Math.min(20, maxData + padding);
+    const min = Math.max(0, minData - padding);
+    const range = max - min || 1;
+    const points = validData.map((val, i) => {
+        const x = (i / (validData.length - 1)) * width;
+        const y = height - ((val - min) / range) * height;
+        return { x, y };
+    });
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 0; i < points.length - 1; i++) {
+        const p0 = points[i > 0 ? i - 1 : i];
+        const p1 = points[i];
+        const p2 = points[i + 1];
+        const p3 = points[i + 2] || p2;
+        const cp1x = p1.x + (p2.x - p0.x) * 0.15;
+        const cp1y = p1.y + (p2.y - p0.y) * 0.15;
+        const cp2x = p2.x - (p3.x - p1.x) * 0.15;
+        const cp2y = p2.y - (p3.y - p1.y) * 0.15;
+        d += ` C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${p2.x} ${p2.y}`;
+    }
+    const areaPath = `${d} L ${width} ${height} L 0 ${height} Z`;
+    return (
+        <Svg width={width} height={height}>
+            <Defs>
+                <LinearGradient id="miniChartGradient" x1="0" y1="0" x2="0" y2="1">
+                    <Stop offset="0" stopColor={color} stopOpacity="0.5" />
+                    <Stop offset="1" stopColor={color} stopOpacity="0" />
+                </LinearGradient>
+            </Defs>
+            <Path d={areaPath} fill="url(#miniChartGradient)" />
+            <Path d={d} stroke={color} strokeWidth="2.5" fill="none" />
+        </Svg>
+    );
+};
+
+const GlassCard = ({ children, style, onPress, theme, gradient }) => {
+    const Container = gradient ? ExpoLinearGradient : View;
+    const containerProps = gradient ? { colors: gradient } : {};
+
+    return (
+        <TouchableOpacity activeOpacity={0.85} onPress={onPress} disabled={!onPress}>
+            <Container
+                {...containerProps}
+                style={[{
+                    backgroundColor: (!gradient && theme.dark) ? 'rgba(255, 255, 255, 0.07)' : (!gradient ? 'rgba(255, 255, 255, 0.8)' : undefined),
+                    borderRadius: 20,
+                    padding: 20,
+                    borderWidth: 1,
+                    borderColor: theme.dark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+                    shadowColor: theme.dark ? "#000" : (theme.colors?.primary || "#000"),
+                    shadowOffset: { width: 0, height: 10 },
+                    shadowOpacity: theme.dark ? 0.3 : 0.08,
+                    shadowRadius: 10,
+                    elevation: Platform.OS === 'android' ? 0 : 5,
+                    overflow: 'hidden',
+                }, style]}
+            >
+                {children}
+            </Container>
+        </TouchableOpacity>
+    );
+};
+
 export default function HomePage({ navigation }) {
     const insets = useSafeAreaInsets();
     const { accountID, mainAccount } = useCurrentAccountContext();
     const { theme } = useGlobalAppContext();
+    const { isConnected, refreshLogin } = useAppStackContext();
+    const effectiveAccountID = accountID;
     const isCosmic = theme.colors.primary === '#8B5CF6';
 
     const [refreshing, setRefreshing] = useState(false);
@@ -44,74 +119,13 @@ export default function HomePage({ navigation }) {
         averageHistory: []
     });
     const [showEvolutionArrows, setShowEvolutionArrows] = useState(true);
-
-    // --- Mini Chart Logic ---
-    const MiniLineChart = ({ data, width, height, color = "#a78bfa" }) => {
-        if (!data || data.length < 2) return null;
-
-        const validData = data.filter(d => d.value !== undefined).map(d => d.value);
-        if (validData.length < 2) return null;
-
-        // Dynamic range for better visualization
-        const maxData = Math.max(...validData);
-        const minData = Math.min(...validData);
-        const padding = (maxData - minData) * 0.2 || 0.5; // 20% padding or default 0.5
-
-        const max = Math.min(20, maxData + padding);
-        const min = Math.max(0, minData - padding);
-        const range = max - min || 1;
-
-        const points = validData.map((val, i) => {
-            const x = (i / (validData.length - 1)) * width;
-            const y = height - ((val - min) / range) * height;
-            return { x, y };
-        });
-
-        // Smooth Path
-        let d = `M ${points[0].x} ${points[0].y}`;
-        for (let i = 0; i < points.length - 1; i++) {
-            const p0 = points[i > 0 ? i - 1 : i];
-            const p1 = points[i];
-            const p2 = points[i + 1];
-            const p3 = points[i + 2] || p2;
-
-            const cp1x = p1.x + (p2.x - p0.x) * 0.15;
-            const cp1y = p1.y + (p2.y - p0.y) * 0.15;
-            const cp2x = p2.x - (p3.x - p1.x) * 0.15;
-            const cp2y = p2.y - (p3.y - p1.y) * 0.15;
-
-            d += ` C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${p2.x} ${p2.y}`;
-        }
-
-        // Gradient Area
-        const areaPath = `${d} L ${width} ${height} L 0 ${height} Z`;
-
-        return (
-            <Svg width={width} height={height}>
-                <Defs>
-                    <LinearGradient id="miniChartGradient" x1="0" y1="0" x2="0" y2="1">
-                        <Stop offset="0" stopColor={color} stopOpacity="0.5" />
-                        <Stop offset="1" stopColor={color} stopOpacity="0" />
-                    </LinearGradient>
-                </Defs>
-                <Path d={areaPath} fill="url(#miniChartGradient)" />
-                <Path d={d} stroke={color} strokeWidth="2.5" fill="none" />
-            </Svg>
-        );
-    };
     const [todayLessons, setTodayLessons] = useState([]);
-    const [recentMessages, setRecentMessages] = useState([]);
     const [upcomingHomeworks, setUpcomingHomeworks] = useState([]);
+    const [recentMessages, setRecentMessages] = useState([]);
 
     const scrollViewRef = useRef(null);
 
-    const { isConnected } = useAppStackContext();
-    const effectiveAccountID = (accountID && accountID !== "undefined") ? accountID : ((mainAccount?.id && mainAccount.id !== "undefined") ? mainAccount.id : null);
-
     useEffect(() => {
-        console.log('[HomePage] useEffect triggered | isConnected:', isConnected);
-        console.log('[HomePage] ID Diagnostic: accountID=', accountID, 'mainAccount.id=', mainAccount?.id, 'effective=', effectiveAccountID);
-
         // Check if we have mainAccount (which should have ID)
         if (isConnected && mainAccount && mainAccount.id) {
             console.log('[HomePage] Connection established and ID found. Loading data...');
@@ -175,8 +189,15 @@ export default function HomePage({ navigation }) {
         const checkLunchTime = () => {
             const now = new Date();
             let isLunch = false;
+            // 1. General Time Window (The "Global Lunch Window")
+            const hours = now.getHours();
+            const minutes = now.getMinutes();
+            const currentTime = hours * 60 + minutes;
+            if (currentTime >= 690 && currentTime <= 825) { // 11:30 to 13:45
+                isLunch = true;
+            }
 
-            // 1. Try to find explicit lunch event in timetable
+            // 2. Try to find explicit lunch event in timetable (overrides/complements window)
             // Keywords: Repas, Cantine, Midi, Déjeuner, Pause Méridienne
             const lunchLesson = todayLessons.find(l => {
                 const title = (l.matiere || "").toLowerCase();
@@ -186,11 +207,8 @@ export default function HomePage({ navigation }) {
             });
 
             if (lunchLesson) {
-                // Found a specific event
                 const start = safeDate(lunchLesson.start_date);
                 const end = safeDate(lunchLesson.end_date);
-
-                // Show from 30 mins before start, until the end of the meal slot
                 const startWindow = new Date(start);
                 startWindow.setMinutes(start.getMinutes() - 30);
 
@@ -423,31 +441,6 @@ export default function HomePage({ navigation }) {
         return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
     };
 
-    // Glass Card Component (Solid background instead of gradient)
-    const GlassCard = ({ children, style, onPress }) => (
-        <TouchableOpacity activeOpacity={0.85} onPress={onPress} disabled={!onPress}>
-            <View
-                style={[{
-                    borderRadius: 20,
-                    padding: 20,
-                    backgroundColor: theme.dark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.8)',
-                    borderWidth: 1,
-                    borderColor: theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
-                    // Shadows
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: theme.dark ? 0.3 : 0.1,
-                    shadowRadius: 8,
-                    // Fix for Android grey squares: Remove elevation on Android if transparent
-                    elevation: Platform.OS === 'android' ? 0 : 5,
-                    overflow: 'hidden', // Ensure cleaner edges
-                }, style]}
-            >
-                {children}
-            </View>
-        </TouchableOpacity>
-    );
-
     const isLessonActive = (lesson) => {
         const now = new Date();
         const start = safeDate(lesson.start_date);
@@ -496,10 +489,10 @@ export default function HomePage({ navigation }) {
                 contentContainerStyle={{ paddingBottom: 120 }}
             >
                 {/* Hero Header */}
-                <View style={{ paddingTop: 20, paddingHorizontal: 20, marginBottom: 35 }}>
+                <View style={{ paddingTop: Platform.OS === 'android' ? insets.top + 20 : 20, paddingHorizontal: 20, marginBottom: 35 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 25 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <CustomProfilePhoto size={52} accountID={effectiveAccountID} onPress={() => navigation.navigate("SettingsStack")} />
+                            <CustomProfilePhoto size={52} accountID={mainAccount?.id} onPress={() => navigation.navigate("SettingsStack")} />
                             <View style={{ marginLeft: 16 }}>
                                 <Text style={{ color: '#9ca3af', fontSize: 13, marginBottom: 2 }}>Bienvenue 👋</Text>
                                 <Text style={{ color: theme.colors.onBackground, fontSize: 22, fontWeight: '800', letterSpacing: 0.5 }}>
@@ -532,7 +525,8 @@ export default function HomePage({ navigation }) {
                     {/* Lunch Time Card (Cantine) - Only shows between 11h and 14h */}
                     {isLunchTime && (
                         <GlassCard
-                            gradient={['rgba(249, 115, 22, 0.4)', 'rgba(234, 88, 12, 0.4)']} // Orange Gradient
+                            theme={theme}
+                            gradient={[theme.colors.primary + '66', theme.colors.primary + '33']} // Adaptive Theme Gradient
                             style={{ marginBottom: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
                             onPress={() => navigation.navigate("CantinePage")}
                         >
@@ -562,6 +556,7 @@ export default function HomePage({ navigation }) {
 
                     {/* Big Average Card */}
                     <GlassCard
+                        theme={theme}
                         gradient={theme.dark ? ['rgba(255, 255, 255, 0.08)', 'rgba(255, 255, 255, 0.04)'] : ['#FFFFFF', '#FFFFFF']}
                         onPress={() => navigation.navigate("MarksTab")}
                     >
@@ -599,6 +594,7 @@ export default function HomePage({ navigation }) {
                                                         alignItems: 'center'
                                                     }}>
                                                         <Icon size={14} color={Color} strokeWidth={3} />
+
                                                         <Text style={{
                                                             color: Color,
                                                             fontSize: 12,
@@ -649,9 +645,9 @@ export default function HomePage({ navigation }) {
                 <View style={{ paddingHorizontal: 20, marginBottom: 35 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                         {/* Devoirs */}
-                        {/* Devoirs */}
                         <GlassCard
                             style={{ flex: 1, marginRight: 8, paddingVertical: 18 }}
+                            theme={theme}
                             gradient={theme.dark ? ['rgba(255, 255, 255, 0.05)', 'rgba(255, 255, 255, 0.02)'] : ['#FFFFFF', '#FFFFFF']}
                             onPress={() => navigation.navigate("HomeworkTab")}
                         >
@@ -685,6 +681,7 @@ export default function HomePage({ navigation }) {
                         {/* Cours */}
                         <GlassCard
                             style={{ flex: 1, marginHorizontal: 8, paddingVertical: 18 }}
+                            theme={theme}
                             gradient={theme.dark ? ['rgba(255, 255, 255, 0.05)', 'rgba(255, 255, 255, 0.02)'] : ['#FFFFFF', '#FFFFFF']}
                             onPress={() => navigation.navigate("CalendarTab")}
                         >
@@ -705,6 +702,7 @@ export default function HomePage({ navigation }) {
                         {/* Messages */}
                         <GlassCard
                             style={{ flex: 1, marginLeft: 8, paddingVertical: 18 }}
+                            theme={theme}
                             gradient={theme.dark ? ['rgba(255, 255, 255, 0.05)', 'rgba(255, 255, 255, 0.02)'] : ['#FFFFFF', '#FFFFFF']}
                             onPress={() => AdsHandler.showInterstitialAd(() => navigation.navigate("MessageriePage"), 'message')}
                         >
@@ -779,12 +777,13 @@ export default function HomePage({ navigation }) {
                                             <GlassCard
                                                 key={index}
                                                 onPress={handlePress}
+                                                theme={theme}
                                                 style={{
                                                     width: 165, // Slightly wider
                                                     height: 105, // Slightly taller
                                                     marginRight: 12,
                                                     padding: 0,
-                                                    borderColor: isActive ? (lesson.color || '#a78bfa') : 'rgba(255,255,255,0.08)',
+                                                    borderColor: isActive ? (lesson.color || '#a78bfa') : (theme.dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'),
                                                     borderWidth: isActive ? 2.5 : 1, // Thicker border for active
                                                     borderRadius: 20,
                                                     overflow: 'hidden'
@@ -853,7 +852,7 @@ export default function HomePage({ navigation }) {
                                 </ScrollView>
                             ) : (
                                 <View style={{ paddingHorizontal: 20 }}>
-                                    <GlassCard style={{ paddingVertical: 25, alignItems: 'center' }}>
+                                    <GlassCard style={{ paddingVertical: 25, alignItems: 'center' }} theme={theme}>
                                         <View style={{
                                             width: 50, height: 50, borderRadius: 25,
                                             backgroundColor: 'rgba(245, 158, 11, 0.1)',
@@ -886,6 +885,7 @@ export default function HomePage({ navigation }) {
                             <GlassCard
                                 key={index}
                                 style={{ marginBottom: 12, padding: 0, overflow: 'hidden' }} // Remove padding for full control
+                                theme={theme}
                                 gradient={Platform.select({
                                     android: theme.dark ? ['rgba(255, 255, 255, 0.05)', 'rgba(255, 255, 255, 0.02)'] : ['#FFFFFF', '#FFFFFF'],
                                     ios: ['transparent', 'transparent']
@@ -932,7 +932,7 @@ export default function HomePage({ navigation }) {
                             </GlassCard>
                         ))
                     ) : (
-                        <GlassCard style={{ paddingVertical: 30, alignItems: 'center' }}>
+                        <GlassCard style={{ paddingVertical: 30, alignItems: 'center' }} theme={theme}>
                             <Text style={{ color: '#6b7280', fontSize: 15 }}>Aucun devoir à venir ✨</Text>
                         </GlassCard>
                     )}
@@ -952,6 +952,7 @@ export default function HomePage({ navigation }) {
                             <GlassCard
                                 key={index}
                                 style={{ marginBottom: 12, padding: 0, overflow: 'hidden' }}
+                                theme={theme}
                                 gradient={theme.dark ? ['rgba(255, 255, 255, 0.05)', 'rgba(255, 255, 255, 0.02)'] : ['#FFFFFF', '#FFFFFF']}
                                 onPress={() => navigation.navigate("MessageDetailsPage", { message: msg })}
                             >
@@ -988,7 +989,7 @@ export default function HomePage({ navigation }) {
                             </GlassCard>
                         ))
                     ) : (
-                        <GlassCard style={{ paddingVertical: 30, alignItems: 'center' }}>
+                        <GlassCard style={{ paddingVertical: 30, alignItems: 'center' }} theme={theme}>
                             <Text style={{ color: '#6b7280', fontSize: 15 }}>Aucun message récent 📭</Text>
                         </GlassCard>
                     )}

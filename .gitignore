@@ -1,7 +1,8 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
 # dependencies
 node_modules/
+node_modules*/
+package-lock*.json
+!package-lock.json
 
 # Expo
 .expo/
@@ -30,42 +31,49 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-# .env*.local
-
-# typescript
-*.tsbuildinfo
-
-# generated native folders
-# /ios
-# /android
+# generated native folders - exclude build artifacts
+# If you want to keep the folders but not the massive build files
+ios/build/
+ios/Pods/
+ios/DerivedData/
+android/build/
+android/.gradle/
+android/app/build/
 
 # Private files
 *.local
 google-services.json
 GoogleService-Info.plist
 .env
-node_modules_OLD/
 *.bak
 
 # Secrets
 src/config/secrets.js
 
 # Backups
-ios_backup_duplicates/
 *_backup/
-*.bak
+*_backup_duplicates/
+ios_backup/
+android_backup/
+* OLD/
+* 2/
+* 3/
+* 4/
 
 # Build Artifacts
 *.ipa
 *.apk
 *.dSYM
 *.mobileprovision
+*.log
 
-# Papillon / Sensitive
+# Sensitive
 *papillon*
 
-# Explicit IPAs
-ios/NotiaNote.ipa
-*.ipa
-
+# Specific Wallet binaries
+NotiaNote-Wallet-Backend/**/*.pkpass
+NotiaNote-Wallet-Backend/check.zip
+NotiaNote-Wallet-Backend/certs/
+NotiaNote-Wallet-Backend/images/
+NotiaNote-Wallet-Backend/node_modules/
+NotiaNote-Wallet-Backend/package-lock.json

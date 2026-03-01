@@ -110,7 +110,7 @@ export default function OnboardingThemePage({ navigation }) {
                 end={{ x: 1, y: 1 }}
             />
 
-            <View style={[styles.content, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }]}>
+            <View style={[styles.content, { paddingTop: insets.top + 45, paddingBottom: insets.bottom + 20 }]}>
                 <Animated.View style={{ flex: 1, opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
                     <View style={styles.header}>
                         <View style={[styles.iconContainer, { backgroundColor: itemBackgroundColor, borderColor: itemBorderColor }]}>

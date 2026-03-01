@@ -109,8 +109,12 @@ class MarksHandler {
     // Problem with ÉcoleDirecte
     if (!marks.periodes) {
       console.warn("[MarksHandler] No periodes in marks data!");
+      console.warn("Received data keys:", Object.keys(marks));
       return 0;
     }
+
+    console.log(`[MarksHandler] Processing ${marks.periodes.length} periods and ${marks.notes?.length || 0} marks.`);
+    marks.periodes.forEach(p => console.log(`[MarksHandler] Period ${p.codePeriode} has ${p.ensembleMatieres?.disciplines?.length || 0} disciplines.`));
 
     // Detect right guess parameters
     if (!CoefficientHandler.didChooseIfEnable[accountID]) {
@@ -213,10 +217,8 @@ class MarksHandler {
     for (const period of marks.periodes) {
       // Verify validity of period
       let periodID = period.codePeriode;
-      if (!possiblePeriodCodes.includes(periodID)) {
-        console.warn(`[MarksHandler] Skipping unsupported period: ${periodID}`);
-        continue;
-      }
+      // Relaxed period filtering: Many schools use different codes (T1, S1, P1, C1, etc.)
+      // We process all periods but keep the standard ones at the top if needed.
 
       // Get period data
       let periodTitle = period.periode;
@@ -397,15 +399,20 @@ class MarksHandler {
         }
       }
 
-      // Check mark numerical value
-      let isMarkEffective = !(mark.enLettre || mark.nonSignificatif);
-      let markValueStr = `${mark.valeur}`.trim();
-      let markValue = parseFloat(`${mark.valeur}`.replace(",", "."));
-      let markValueOn = parseFloat(`${mark.noteSur}`.replace(",", "."));
+      // Robust boolean parsing for Android/Axios compatibility (handles "true", "1", true, etc.)
+      const isTrue = (v) => v === true || v === "true" || v === "1" || v === 1;
+      const apiEnLettre = isTrue(mark.enLettre);
+      const apiNonSignificatif = isTrue(mark.nonSignificatif);
+
+      let isMarkEffective = !apiEnLettre && !apiNonSignificatif;
 
       // Determine if the mark has a value or is empty
       let markHasValue = true;
       let markOnlyHasCompetences = false;
+      let markValueStr = `${mark.valeur}`.replace(",", ".");
+      let markValue = parseFloat(markValueStr);
+      let markValueOn = parseFloat(`${mark.noteSur}`.replace(",", "."));
+
       if (!markValueOn) {
         isMarkEffective = false;
         markHasValue = false;
@@ -466,6 +473,9 @@ class MarksHandler {
         classValue: markClassValue,
         minClassValue: markMinClassValue,
         maxClassValue: markMaxClassValue,
+
+        enLettre: apiEnLettre,
+        nonSignificatif: apiNonSignificatif,
       };
 
       sortedMarks.push(finalMark);
@@ -486,7 +496,6 @@ class MarksHandler {
           null,
           periodID,
           subjectID,
-          [],
           [],
           1,
           [],
@@ -515,7 +524,6 @@ class MarksHandler {
           periodID,
           subjectID,
           [],
-          [],
           1,
           [],
         );
@@ -536,7 +544,6 @@ class MarksHandler {
             null,
             periodID,
             subSubjectID,
-            [],
             [],
             1,
             [],
@@ -1135,9 +1142,12 @@ class MarksHandler {
           sumOfSubjectGroupsAverages / coefOfSubjectGroupsAverages;
         period.hasAverage = true;
 
+        // Check if we should add a new point to the history
+        const lastPoint = period.averageHistory[period.averageHistory.length - 1];
         if (
-          period.averageHistory[period.averageHistory.length - 1]?.value !=
-          period.average
+          !lastPoint ||
+          lastPoint.value !== period.average ||
+          lastPoint.date !== averageDate
         ) {
           period.averageHistory.push({
             value: period.average,
@@ -1208,6 +1218,30 @@ class MarksHandler {
       await this.applyCustomData(accountID, givenPeriod, true);
       this.applyMissingData(accountID, givenPeriod, true);
 
+      // FORCE RE-EVALUATION of isEffective for ALL marks (fixes stale data from previous syncs)
+      Object.values(givenPeriod.marks).forEach(mark => {
+        // Robust boolean parsing (handles strings like "0" or "1" or "true" from API)
+        const isTrue = (v) => v === true || v === "true" || v === "1" || v === 1;
+
+        let isEff = true;
+        if (mark.enLettre !== undefined || mark.nonSignificatif !== undefined) {
+          const apiEnLettre = isTrue(mark.enLettre);
+          const apiNonSignificatif = isTrue(mark.nonSignificatif);
+          isEff = !apiEnLettre && !apiNonSignificatif;
+        } else if (mark.defaultIsEffective !== undefined) {
+          // Fallback for older cache data that doesn't have the explicit flags yet
+          isEff = mark.defaultIsEffective;
+        }
+
+        let valStr = `${mark.valueStr || (mark.value !== undefined ? mark.value : "")}`.replace(",", ".");
+        let val = parseFloat(valStr);
+
+        // Safety: If it's empty (no value and no competences), it can't be effective
+        if (isNaN(val) && !mark.onlyHasCompetences) isEff = false;
+
+        mark.isEffective = isEff;
+      });
+
       // Add the marks one by one
       var listOfMarks = givenPeriod.sortedMarks.slice().reverse();
 
@@ -1216,7 +1250,6 @@ class MarksHandler {
       simulatedMarks.forEach(sm => {
         if (sm.periodID && sm.periodID !== givenPeriod.id) return;
 
-        // Add to period map
         // Add to period map
         givenPeriod.marks[sm.id] = {
           ...sm,
@@ -1368,4 +1401,5 @@ class MarksHandler {
   }
 }
 
+MarksHandler.default = MarksHandler;
 export default MarksHandler;

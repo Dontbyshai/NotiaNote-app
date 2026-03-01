@@ -288,7 +288,7 @@ function SettingsPage({ navigation }) {
             <SettingsItem
               icon={<InfoIcon size={22} color="#3B82F6" />}
               title="À propos de NotiaNote"
-              subtitle="v2.1.0 - Premium Edition"
+              subtitle="v2.1.2 - Premium Edition"
               onPress={() => navigation.navigate("AboutPage")}
               color="#3B82F6"
               isLast
